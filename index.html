@@ -189,7 +189,7 @@ section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-b
 .st span { color: var(--muted); font-size: 13px; }
 .st .num { font-size: 18px; color: var(--flat); }
 .s130 { --bar: var(--s130); } .s140 { --bar: var(--s140); } .s150 { --bar: var(--s150); } .s160 { --bar: var(--s160); }
-.st[class*=" s1"] .num, .ovr .num[class*=" s1"], .ovr-n[class*=" s1"] { color: var(--bar); font-weight: 700; }
+.st[class*=" s1"] .num { color: var(--bar); font-weight: 700; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 .facts div { display: flex; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .facts dt { color: var(--muted); font-size: 13px; }
@@ -435,7 +435,7 @@ const SLOT = { LCB: 'CB', RCB: 'CB', LCM: 'CM', RCM: 'CM', LDM: 'CDM', RDM: 'CDM
 function rating(p, add) {
   const ps = p.positions || [], hit = ps.find(x => x[0] === (SLOT[p.pos] || p.pos)), [pos, v] = hit || ps[0] || [];
   if (!v) return p.pos ? `<span class="pos">${esc(p.pos)}</span>` : '';
-  return `<span class="pos">${esc(hit ? p.pos : pos)}</span><span class="ovr-n num ${tier(v + add)}"><span class="sr">오버롤 </span>${v + add}</span>${p.pos === 'SUB' ? '<span class="pos">SUB</span>' : ''}`;
+  return `<span class="pos">${esc(hit ? p.pos : pos)}</span><span class="ovr-n num"><span class="sr">오버롤 </span>${v + add}</span>${p.pos === 'SUB' ? '<span class="pos">SUB</span>' : ''}`;
 }
 const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
 function playerList(players, team, ctx) {
@@ -520,7 +520,7 @@ function viewPlayer(spid, grade, ctx) {
                  ['명성', f.fame], ['국적', f.nation], ['소속', f.team], ['생년월일', f.birth]].filter(x => x[1]);
   return `<div class="head">${back}<h1>${ident(d)}</h1></div>
     <div class="who quote"><div>${bigPrice(d.now)}
-      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num ${tier(v + add)}">${v + add}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
+      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v + add}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
       ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
     ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
     ${f.traits?.length ? `<ul class="traits"><li>특성</li>${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
