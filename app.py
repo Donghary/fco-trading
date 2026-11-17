@@ -184,6 +184,20 @@ def card(spid, grade, pos=None, price=None):
     }
 
 
+def read_watch():
+    """watchlist.json : {구단주명: [{spid, grade}]}. 페이지에서 누구나 고칠 수 있으므로 모양이 틀린 항목은 버림"""
+    try:
+        raw = json.loads((ROOT / "watchlist.json").read_text())
+    except ValueError:
+        raw = {}
+    def ok(w):
+        return (isinstance(w, dict) and type(w.get("spid")) is int and w["spid"] in NAMES
+                and type(w.get("grade")) is int and 1 <= w["grade"] <= 13)
+    lists = raw if isinstance(raw, dict) else {}
+    return {n: [{"spid": w["spid"], "grade": w["grade"]} for w in lists.get(n, []) if ok(w)][:30]
+            if isinstance(lists.get(n, []), list) else [] for n in OWNERS}
+
+
 def write(name, obj):
     f = SITE / name
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -206,8 +220,7 @@ def build():
                 s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
                 print("명단 조회 실패", n, e, file=sys.stderr)
 
-    raw = json.loads((ROOT / "watchlist.json").read_text())  # {구단주명: [{spid, grade}]}
-    watch = {n: raw.get(n, []) if isinstance(raw, dict) else [] for n in OWNERS}
+    watch = read_watch()
     keys = {(p["spid"], p["grade"]) for s in squads.values() for p in s["players"]}
     keys |= {(w["spid"], w["grade"]) for ws in watch.values() for w in ws}
     prices = {}
@@ -293,6 +306,12 @@ def check():
     assert [n for n, _ in i["summary"]] == ["스피드", "슛", "패스", "드리블", "수비", "피지컬"], i["summary"]
     assert len(i["stats"]) == 34 and i["stats"][0][0] == "속력" and i["traits"] and i["positions"] and i["pay"], i
     assert POSITIONS[28] == "SUB" and card(201200104, 8)["name"] == "손흥민"
+    keep = (ROOT / "watchlist.json").read_text()
+    (ROOT / "watchlist.json").write_text(json.dumps({OWNERS[0]: [{"spid": 201200104, "grade": 8}, {"spid": "x", "grade": 8}, {"spid": 201200104, "grade": 99}, 7], "남": [{"spid": 201200104, "grade": 1}], OWNERS[1]: "x"}))
+    try:
+        assert read_watch() == {OWNERS[0]: [{"spid": 201200104, "grade": 8}], OWNERS[1]: [], OWNERS[2]: [], OWNERS[3]: []}, read_watch()
+    finally:
+        (ROOT / "watchlist.json").write_text(keep)
     print("점검 통과. 손흥민(8강) 현재가", p["now"], "/ 특성", i["traits"])
 
 

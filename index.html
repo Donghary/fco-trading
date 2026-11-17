@@ -586,7 +586,7 @@ async function unlock(pass) {
   ui.busy = false; render();
 }
 async function setLock(pass) {
-  if (pass.length < 8) { ui.msg = '비밀번호는 8자 이상이어야 함'; ui.needToken = true; return render(); }
+  if (pass.length < 4) { ui.msg = '비밀번호는 4자 이상이어야 함'; ui.needToken = true; return render(); }
   ui.busy = true; render();
   try { const lock = await lockToken(pass, LS.get('token', '')); await repoWrite('lock.json', () => lock, '편집 비밀번호 변경'); ui.msg = '비밀번호를 정함. 1~2분 뒤부터 친구들이 이 비밀번호로 저장할 수 있음'; }
   catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
@@ -621,7 +621,7 @@ function viewWatch() {
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
     <details ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
       ${token ? `<p class="note">이 기기에서 관심선수를 저장하고 뺄 수 있음. 친구들이 토큰 없이 쓰게 하려면 비밀번호를 정해서 알려주면 됨</p>
-        <form class="find" data-setlock><input class="field" id="newpass" type="password" placeholder="친구들과 쓸 비밀번호 (8자 이상)" autocomplete="new-password" aria-label="새 비밀번호"><button class="btn" ${ui.busy ? 'disabled' : ''}>${S.lock ? '비밀번호 바꾸기' : '비밀번호 정하기'}</button></form>
+        <form class="find" data-setlock><input class="field" id="newpass" type="password" placeholder="친구들과 쓸 비밀번호" autocomplete="new-password" aria-label="새 비밀번호"><button class="btn" ${ui.busy ? 'disabled' : ''}>${S.lock ? '비밀번호 바꾸기' : '비밀번호 정하기'}</button></form>
         <p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>`
       : `${S.lock ? `<p class="note">친구들과 정한 비밀번호를 넣으면 이 기기에서 저장할 수 있음. 한 번만 넣으면 됨</p>
           <form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`
