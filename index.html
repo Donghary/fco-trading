@@ -3,22 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0E1216">
+<meta name="theme-color" content="#101112">
 <meta name="color-scheme" content="dark">
 <title>구단 시세판</title>
 <meta name="description" content="FC온라인 네 구단의 구단 가치와 선수 시세를 한 판에서 봄">
 <meta property="og:title" content="구단 시세판">
 <meta property="og:description" content="FC온라인 네 구단의 구단 가치와 선수 시세">
-<link rel="icon" href="favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="favicon.png?v=4" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png?v=4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>
 :root {
-  --board: #0E1216; --panel: #151A20; --raise: #1D242C; --line: #252D37; --line-strong: #3B4654;
-  --ink: #EDF1F4; --muted: #94A0AD; --faint: #7F8B99;
-  --up: #FF5B4F; --down: #4C9DFF; --flat: #C3CCD6;
+  --board: #101112; --panel: #17181A; --raise: #202224; --line: #2A2C2F; --line-strong: #44474C;
+  --ink: #F0F1F2; --muted: #9C9FA4; --faint: #85888D;
+  --up: #FF5B4F; --down: #4C9DFF; --flat: #C8CACD;
   --amber: #FFC233; --amber-ink: #1B1400;
   --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --num: "Barlow Condensed", var(--sans);
@@ -42,7 +42,7 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 
 /* 숫자 : 좁은 고정폭 숫자, 단위(조 억 만)는 작게 */
 .num { font-family: var(--num); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
-.num i { font: 500 .62em/1 var(--sans); font-style: normal; color: var(--muted); margin: 0 .12em 0 .06em; }
+.num i { font: 600 .64em/1 var(--sans); font-style: normal; opacity: .72; margin: 0 .12em 0 .06em; }
 .na { color: var(--faint); font-family: var(--sans); font-weight: 500; font-size: 13px; }
 .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--flat); }
 .chg { display: inline-flex; align-items: baseline; gap: 3px; }
@@ -93,9 +93,10 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-chg .chg, .q-chg .amt { justify-self: end; }
 .q-chg .amt { font-weight: 500; min-width: 64px; text-align: right; }
 .q-line { grid-column: 1 / -1; width: 100%; height: 34px; margin-top: 8px; }
-.q-line path { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.q-line path { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .q-err { grid-column: 1 / -1; color: var(--amber); font-size: 13px; }
 .editing .q-main { padding-right: 100px; pointer-events: none; }
+.editing .q-val, .editing .q-chg, .editing .q-line { display: none; }
 .q-move { position: absolute; right: 0; top: 12px; display: flex; gap: 6px; }
 .q-move .btn { width: 44px; padding: 0; }
 .q-more { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid var(--line); font-weight: 700; }
@@ -127,13 +128,13 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .plot .cross { stroke: var(--line-strong); stroke-width: 1; }
 .plot .base { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 5; }
 .plot [hidden] { display: none; }
-.tip { position: absolute; top: 0; z-index: 1; pointer-events: none; padding: 7px 10px; border-radius: 8px; background: var(--raise);
-  border: 1px solid var(--line-strong); box-shadow: 0 8px 20px -6px rgb(0 0 0 / .6); font-size: 13px; line-height: 1.35; white-space: nowrap; }
-.tip b { display: block; font-size: 19px; }
-.tip .when { color: var(--muted); }
+.readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; height: 58px; align-content: center; margin-top: 8px; font-size: 14px; }
+.readout b { font-size: 24px; line-height: 1.15; }
+.readout .when { color: var(--muted); font: 600 15px var(--num); min-width: 78px; }
+.readout .vs { flex-basis: 100%; color: var(--muted); }
 .plot-empty { display: grid; place-items: center; height: 210px; color: var(--muted); font-size: 14px; text-align: center; padding: 0 24px; }
 .plot-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
-.plot-foot .num { color: var(--flat); font-size: 15px; }
+.plot-foot .mm { color: var(--flat); font-size: 15px; }
 
 /* 선수 목록 */
 .sorts { display: flex; align-items: center; gap: 2px; margin-right: -8px; }
@@ -158,7 +159,7 @@ a.p:hover { background: var(--panel); }
 .p-d .chg, .p-d .amt { justify-self: end; }
 .p-d .amt { font-weight: 500; }
 .p-act { grid-area: now; align-self: center; }
-.pending { color: var(--amber); font-size: 13px; grid-area: d1; }
+.pending { color: var(--muted); font-size: 13px; grid-area: d1; }
 
 /* 강화 배지 : 게임의 색 단계 (1 회색, 2~4 동, 5~7 은, 8~10 금, 11~13 플래티넘) */
 .g { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 4px; border-radius: 4px; border: 1.5px solid;
@@ -203,7 +204,7 @@ select.field { flex: none; width: 76px; padding: 0 8px; font-family: var(--num);
 label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 22px; }
 .note { color: var(--muted); font-size: 14px; padding: 16px 0; max-width: 62ch; }
 .note b { color: var(--ink); }
-.msg { color: var(--amber); font-size: 14px; padding: 10px 0 0; }
+.msg { color: var(--ink); font-size: 14px; font-weight: 600; padding: 10px 0 0; }
 .res { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 0; }
 .res .p-id { grid-area: auto; }
 .res .p-id small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -218,6 +219,7 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 
 @media (min-width: 760px) {
   main { padding-bottom: 48px; }
+  .ranges button { flex: none; padding: 0 20px; }
   .top { padding: 0 max(24px, calc((100vw - 728px) / 2)); }
   .dock { position: static; order: 1; display: flex; gap: 4px; height: auto; padding: 0; background: none; border: 0; }
   .dock a { display: flex; gap: 6px; padding: 0 12px; min-height: 40px; border-radius: 8px; font-size: 14px; }
@@ -238,6 +240,10 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
   .p { grid-template-columns: 48px minmax(0, 1fr) 100px 270px 270px; grid-template-areas: "face id now d1 d7"; align-items: center; gap: 0 20px; }
   .p-d { grid-template-columns: 44px 1fr 66px 86px; }
   .quote .big { font-size: 48px; }
+  .q-main { grid-template-columns: minmax(170px, 1fr) minmax(140px, 280px) 260px 240px; grid-template-areas: "name line val chg" "sub line val chg"; align-items: center; gap: 0 28px; padding: 16px 0; }
+  .q-name { grid-area: name; } .q-sub { grid-area: sub; align-self: start; } .q-val { grid-area: val; } .q-chg { grid-area: chg; }
+  .q-line { grid-area: line; margin: 0; height: 46px; }
+  .q-err { grid-column: 1 / -1; }
 }
 @media (max-width: 359px) {
   .p-d { grid-template-columns: 40px 1fr 60px 74px; font-size: 14px; }
@@ -257,7 +263,7 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
   <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
 </svg>
 <header class="top">
-  <a class="brand" href="#/"><img src="favicon.png" alt="" width="24" height="24">구단 시세판</a>
+  <a class="brand" href="#/"><img src="favicon.png?v=4" alt="" width="26" height="26">구단 시세판</a>
   <nav class="dock" aria-label="주 메뉴">
     <a href="#/" data-nav="home"><svg class="ico"><use href="#i-board"/></svg>구단</a>
     <a href="#/watch" data-nav="watch"><svg class="ico"><use href="#i-star"/></svg>관심선수</a>
@@ -319,6 +325,16 @@ const gradeBadge = g => `<span class="g g${g >= 11 ? 11 : g >= 8 ? 8 : g >= 5 ? 
 const face = p => `<img class="face" src="${CDN}playersAction/p${p.spid}.png" data-pid="${p.spid % 1000000}" alt="" width="48" height="48" loading="lazy">`;
 const ident = p => `${gradeBadge(p.grade)}${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="18">` : ''}<b>${esc(p.name)}</b>`;
 
+// ---------- 풀케미 오버롤 ----------
+// 받아온 능력치는 적응도 5(+4)까지 반영된 값. 사용자 기준 : 선발 중 8강 이상이 8명이면 8강 이상 선수 +8,
+// 선발 중 11강 이상이 8명이면 11강 이상 선수만 +9 (그 팀의 8~10강 선수는 그대로 +8)
+const BASE_CHEM = 4;
+function chem(players, grade) {
+  const st = players.filter(p => p.pos !== 'SUB'), n = g => st.filter(p => p.grade >= g).length;
+  return grade >= 11 && n(11) >= 8 ? 9 : grade >= 8 && n(8) >= 8 ? 8 : BASE_CHEM;
+}
+const chemLabel = c => c > BASE_CHEM ? `풀케미 +${c}` : '적응도 5';
+
 // ---------- 구단 합계 ----------
 function team(players) {
   const ps = players.filter(p => p.now);
@@ -340,7 +356,7 @@ function chartHTML(id, ranges) {
   ui.range[id] = cur;
   return `<div class="chart" data-chart="${id}">
     <div class="ranges" role="tablist" aria-label="기간">${ranges.map(r => `<button role="tab" aria-selected="${r.id === cur}" data-range="${r.id}">${r.label}</button>`).join('')}</div>
-    <div class="plot" tabindex="0" role="img"></div><div class="plot-foot"></div></div>`;
+    <div class="readout"></div><div class="plot" tabindex="0" role="img"></div><div class="plot-foot"></div></div>`;
 }
 const charts = {};
 function drawChart(id, ranges) {
@@ -350,7 +366,7 @@ function drawChart(id, ranges) {
   const r = ranges.find(x => x.id === ui.range[id]), pts = r.pts, plot = host.querySelector('.plot'), foot = host.querySelector('.plot-foot');
   if (pts.length < 2) {
     plot.innerHTML = `<div class="plot-empty">${esc(r.note || '이 기간에는 표시할 시세 기록이 아직 없음')}</div>`;
-    plot.setAttribute('aria-label', '기록 없음'); foot.innerHTML = '';
+    plot.setAttribute('aria-label', '기록 없음'); foot.innerHTML = ''; host.querySelector('.readout').innerHTML = ''; plot._pts = null;
     return;
   }
   const W = plot.clientWidth || 340, H = W >= 600 ? 260 : 210, L = 4, R = 54, T = 14, B = 24;
@@ -368,24 +384,23 @@ function drawChart(id, ranges) {
     <path class="series" d="${d}" stroke="var(--${dir})"/>
     <text x="${L}" y="${H - 6}">${esc(pts[0].lab)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(pts.at(-1).lab)}</text>
     <g class="hover" hidden><line class="cross" y1="${T}" y2="${H - B}"/><circle r="4.5" fill="var(--board)" stroke="var(--${dir})" stroke-width="2.5"/></g>
-  </svg><div class="tip" hidden></div>`;
-  const [pc, amt] = move(vs.at(-1), vs[0]);
+  </svg>`;
   plot.setAttribute('aria-label', `${r.label} 시세 추이. 최저 ${compact(min).replace(/<[^>]+>/g, '')}, 최고 ${compact(max).replace(/<[^>]+>/g, '')}`);
-  foot.innerHTML = `<span>${esc(pts[0].lab)}보다 ${pc} ${amt}</span><span>최저 <span class="num">${compact(min)}</span>   최고 <span class="num">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
-  plot._pts = pts; plot._geo = { X, Y, W, L, R }; plot._i = pts.length - 1;
+  foot.innerHTML = `<span>최저 <span class="num mm">${compact(min)}</span></span><span>최고 <span class="num mm">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
+  plot._pts = pts; plot._geo = { X, Y, W, L, R };
+  hoverChart(plot, null);
 }
 function hoverChart(plot, i) {
-  const pts = plot._pts, g = plot.querySelector('.hover'), tip = plot.querySelector('.tip');
+  // i 가 없으면 기간의 마지막 값을 읽어 주고 십자선은 숨김
+  const pts = plot._pts, g = plot.querySelector('.hover'), out = plot.previousElementSibling;
   if (!pts || !g) return;
-  if (i == null) { g.setAttribute('hidden', ''); tip.hidden = true; return; }
-  plot._i = i = Math.max(0, Math.min(pts.length - 1, i));
-  const p = pts[i], { X, Y, W, R } = plot._geo, x = X(p.t), [pc, amt] = move(p.v, pts[0].v);
-  g.removeAttribute('hidden');
+  const show = i != null;
+  plot._i = i = Math.max(0, Math.min(pts.length - 1, i ?? pts.length - 1));
+  const p = pts[i], { X, Y } = plot._geo, x = X(p.t), [pc, amt] = move(p.v, pts[0].v);
+  g.toggleAttribute('hidden', !show);
   g.querySelector('line').setAttribute('x1', x); g.querySelector('line').setAttribute('x2', x);
   g.querySelector('circle').setAttribute('cx', x); g.querySelector('circle').setAttribute('cy', Y(p.v));
-  tip.hidden = false;
-  tip.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b>${i ? `${esc(pts[0].lab)}보다 ${pc} ${amt}` : '이 기간의 시작 값'}`;
-  tip.style.left = Math.max(0, Math.min(W - R - tip.offsetWidth, x - tip.offsetWidth / 2)) + 'px';
+  out.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b><span class="vs">${i ? `${esc(pts[0].lab)}보다 ${pc} ${amt}` : '이 기간의 시작 값'}</span>`;
 }
 function nearest(plot, clientX) {
   const { X } = plot._geo, x = clientX - plot.getBoundingClientRect().left, pts = plot._pts;
@@ -401,28 +416,36 @@ function agoBlock(now, d1, d7) {
   return `<div class="ago"><span class="lbl">1일 전</span><span class="then num">${d1 ? full(d1) : '-'}</span>${p1}${a1}
     <span class="lbl">7일 전</span><span class="then num">${d7 ? full(d7) : '-'}</span>${p7}${a7}</div>`;
 }
-function playerRow(p, extra = '') {
+function playerRow(p, extra = '', add = 0, ctx = '') {
   const cell = (days, cls) => { const then = ago(p, days), [pc, amt] = move(p.now, p.hist.length ? then : 0);
     return `<span class="p-d ${cls}"><span class="lbl">${days}일 전</span><span class="then num">${p.hist.length ? compact(then) : '-'}</span>${pc}${amt}</span>`; };
-  return `<li><a class="p" href="#/p/${p.spid}/${p.grade}">${face(p)}
-    <span class="p-id">${ident(p)}${p.ovr ? `<span class="ovr-n num"><span class="sr">오버롤 </span>${p.ovr}</span>` : ''}${p.pos ? `<span class="pos">${esc(p.pos)}</span>` : ''}</span>
+  return `<li><a class="p" href="#/p/${p.spid}/${p.grade}${ctx}">${face(p)}
+    <span class="p-id">${ident(p)}${rating(p, add)}</span>
     <span class="p-now num" data-roll="${key(p)}">${compact(p.now)}</span>
     ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`.replace('<li>', extra ? '<li class="acts">' : '<li>');
 }
+const SLOT = { LCB: 'CB', RCB: 'CB', LCM: 'CM', RCM: 'CM', LDM: 'CDM', RDM: 'CDM', LAM: 'CAM', RAM: 'CAM', LS: 'ST', RS: 'ST', LF: 'CF', RF: 'CF' };
+function rating(p, add) {
+  const ps = p.positions || [], hit = ps.find(x => x[0] === (SLOT[p.pos] || p.pos)), [pos, v] = hit || ps[0] || [];
+  if (!v) return p.pos ? `<span class="pos">${esc(p.pos)}</span>` : '';
+  return `<span class="pos">${esc(hit ? p.pos : pos)}</span><span class="ovr-n num"><span class="sr">오버롤 </span>${v + add}</span>${p.pos === 'SUB' ? '<span class="pos">SUB</span>' : ''}`;
+}
 const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
-function playerList(players) {
+function playerList(players, team, ctx) {
   const f = SORTS[ui.sort][1];
   return `<div class="bar"><h2>선수 ${players.length}명</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
       `<button class="btn quiet" data-sort="${k}" aria-pressed="${k === ui.sort}">${label}순</button>`).join('')}</div></div>
-    <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p)).join('')}</ol>`;
+    <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p, '', team ? chem(team, p.grade) - BASE_CHEM : 0, ctx)).join('')}</ol>`;
 }
 
 function viewHome() {
+  const teams = S.owners.map(o => team(o.players)), rel = t => [...t.hist, t.now].map((v, _, h) => v / h[0]);
+  const span = Math.max(.01, ...teams.filter(t => t.n).map(t => Math.max(...rel(t)) - Math.min(...rel(t))));  // 가장 크게 움직인 구단의 폭을 공통 눈금으로
   const rows = orderOf().map((o, at, all) => {
-    const t = team(o.players), [p1, a1] = move(t.now, t.d1), [p7, a7] = move(t.now, t.d7);
-    const h = [...t.hist, t.now], lo = Math.min(...h), hi = Math.max(...h);
-    const line = h.length > 2 ? `<svg class="q-line" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path stroke="var(--${h.at(-1) > h[0] ? 'up' : h.at(-1) < h[0] ? 'down' : 'flat'})" d="${
-      h.map((v, i) => `${i ? 'L' : 'M'}${(i / (h.length - 1) * 100).toFixed(2)} ${(31 - (v - lo) / (hi - lo || 1) * 28).toFixed(2)}`).join('')}"/></svg>` : '';
+    const t = teams[o.i], [p1, a1] = move(t.now, t.d1), [p7, a7] = move(t.now, t.d7);
+    const h = t.n ? rel(t) : [], mid = (Math.max(...h) + Math.min(...h)) / 2;
+    const line = h.length > 2 ? `<svg class="q-line" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path d="${
+      h.map((v, i) => `${i ? 'L' : 'M'}${(i / (h.length - 1) * 100).toFixed(2)} ${(17 - (v - mid) / span * 28).toFixed(2)}`).join('')}"/></svg>` : '';
     return `<li class="q"><a class="q-main" href="#/o/${o.i}">
         <span class="q-name">${esc(o.nick)}</span>
         <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
@@ -433,7 +456,7 @@ function viewHome() {
         <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
   }).join('');
   const w = watchList();
-  return `<div class="bar"><h1>구단 가치 (BP), 최근 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
+  return `<div class="bar"><h1>구단 가치 (BP), 현재 명단 기준 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
     <ol class="board ${ui.edit ? 'editing' : ''}">${rows}</ol>
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
 }
@@ -447,8 +470,8 @@ function viewOwner(i) {
   return `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
     ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}</div>` + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
-    ${o.players.length ? playerList(o.players) : ''}
-    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐</p>`;
+    ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
+    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 풀케미 기준임 : ${chem(o.players, 8) > BASE_CHEM ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 적응도 5만 반영'}</p>`;
 }
 
 function playerRanges(d) {
@@ -469,8 +492,8 @@ function playerRanges(d) {
     { id: 'all', label: daily.length >= 360 ? '1년' : '전체', pts: [...daily, ...cur] },
   ];
 }
-function viewPlayer(spid, grade) {
-  const k = `${spid}_${grade}`, c = detail[k];
+function viewPlayer(spid, grade, ctx) {
+  const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null, bonus = owner ? chem(owner.players, grade) : BASE_CHEM, add = bonus - BASE_CHEM;
   if (!c || c.at !== S.updated) {
     fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
       .catch(() => { detail[k] = { at: S.updated, error: true }; render(); });
@@ -483,17 +506,17 @@ function viewPlayer(spid, grade) {
     <a class="btn" href="#/watch">관심선수에서 찾아 저장</a>`;
   const ranges = playerRanges(d), f = d.info || {};
   after = () => drawChart('player', ranges);
-  const st = ([n, v]) => `<div class="st ${v >= 130 ? 'hi' : ''}" style="--w:${Math.min(100, v / 1.5).toFixed(0)}%"><span>${esc(n)}</span><b class="num">${v}</b></div>`;
+  const st = ([n, v0]) => { const v = v0 + add; return `<div class="st ${v >= 130 ? 'hi' : ''}" style="--w:${Math.min(100, v / 1.5).toFixed(0)}%"><span>${esc(n)}</span><b class="num">${v}</b></div>`; };
   const facts = [['급여', f.pay], ['키', f.height], ['몸무게', f.weight], ['체형', f.body], ['주발', f.foot], ['개인기', f.skill ? f.skill + '성' : ''],
                  ['명성', f.fame], ['국적', f.nation], ['소속', f.team], ['생년월일', f.birth]].filter(x => x[1]);
   return `<div class="head">${back}<h1>${ident(d)}</h1></div>
     <div class="who quote"><div>${bigPrice(d.now)}
-      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
+      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v + add}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
       ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
     ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
     ${f.traits?.length ? `<ul class="traits"><li>특성</li>${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
     ${chartHTML('player', ranges)}
-    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, 적응도 5 기준. 팀컬러 미반영)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
+    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, ${owner ? esc(owner.nick) + ' 구단 ' : ''}${chemLabel(bonus)} 기준)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
       <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(st).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
     ${facts.length ? `<section><h2>선수 정보</h2><dl class="facts">${facts.map(([a, b]) => `<div><dt>${a}</dt><dd>${esc(b)}</dd></div>`).join('')}</dl></section>` : ''}
     <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? '관심선수에서 빼기' : '관심선수로 저장'}</button>
@@ -566,10 +589,10 @@ let after = null;
 const rolled = {};
 function render() {
   if (!S) return;
-  const [, view, a, b] = location.hash.split('/');
+  const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b) : view === 'watch' ? viewWatch() : viewHome();
+  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : viewHome();
   document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (view === 'watch' ? 'watch' : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : '구단 시세판';
   after?.();
@@ -592,6 +615,7 @@ async function load() {
     const r = await fetch('data.json?t=' + Date.now());
     if (!r.ok) throw 0;
     const fresh = await r.json(), changed = !S || fresh.updated !== S.updated;
+    if (S && fresh.v && S.v && fresh.v !== S.v && LS.get('reloaded', '') !== fresh.v) { LS.set('reloaded', fresh.v); return location.reload(); }
     S = fresh;
     if (changed && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)) render(); else stamp();
   } catch {

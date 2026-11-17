@@ -11,6 +11,7 @@ API 키    : api_key.txt 한 줄 또는 환경변수 NEXON_API_KEY
 기록 유지 : 실행마다 상태가 사라지므로 직전 결과(state.json)를 이어받아 시간대별 시세를 쌓음
 """
 import functools
+import hashlib
 import json
 import os
 import re
@@ -178,8 +179,8 @@ def card(spid, grade, pos=None, price=None):
         "name": NAMES.get(spid, str(spid)),
         "season": season.get("className", "").split(" (")[0], "seasonImg": season.get("seasonImg"),
         "now": price and price["now"], "hist": price["daily"][-30:] if price else [],
-        # 대표 오버롤 : 첫 번째 포지션 기준, 강화 단계 반영
-        "ovr": next((v for _, v in STATE["info"].get(f"{spid}_{grade}", {}).get("positions", [])), None),
+        # 포지션별 오버롤 : 강화 단계와 적응도 5 반영, 팀컬러 제외
+        "positions": STATE["info"].get(f"{spid}_{grade}", {}).get("positions", []),
     }
 
 
@@ -231,7 +232,7 @@ def build():
 
     write("state.json", STATE)
     write("data.json", {
-        "updated": now, "repo": REPO,
+        "updated": now, "repo": REPO, "v": hashlib.md5((ROOT / "index.html").read_bytes()).hexdigest()[:8],
         "owners": [{"nick": n, "error": s.get("error"), "match": s["match"],
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
