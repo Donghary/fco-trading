@@ -3,179 +3,632 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1D6A43">
-<title>구단 시세</title>
+<meta name="theme-color" content="#0E1216">
+<meta name="color-scheme" content="dark">
+<title>구단 시세판</title>
+<meta name="description" content="FC온라인 네 구단의 구단 가치와 선수 시세를 한 판에서 봄">
+<meta property="og:title" content="구단 시세판">
+<meta property="og:description" content="FC온라인 네 구단의 구단 가치와 선수 시세">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>
 :root {
-  --bg: #F2F4EF; --surface: #FFFFFF; --ink: #16211B; --muted: #66736B; --line: #D9DED6;
-  --grass: #1D6A43; --up: #D23A2E; --down: #2257C5;  /* 상승 빨강, 하락 파랑 */
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #131A16; --surface: #1B2420; --ink: #E8EDE8; --muted: #93A098; --line: #2C3832;
-          --grass: #5FBF8A; --up: #FF6B5E; --down: #6C9BFF; }
+  --board: #0E1216; --panel: #151A20; --raise: #1D242C; --line: #252D37; --line-strong: #3B4654;
+  --ink: #EDF1F4; --muted: #94A0AD; --faint: #7F8B99;
+  --up: #FF5B4F; --down: #4C9DFF; --flat: #C3CCD6;
+  --amber: #FFC233; --amber-ink: #1B1400;
+  --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --num: "Barlow Condensed", var(--sans);
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --dock: 58px;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); -webkit-text-size-adjust: 100%;
-  font: 15px/1.45 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-  font-variant-numeric: tabular-nums; word-break: keep-all; }
-main { max-width: 1400px; margin: 0 auto; padding: 0 16px calc(32px + env(safe-area-inset-bottom)); }
-header { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 0 8px; }
-h1 { font-size: 17px; margin: 0; }
-#updated, .sub, .note { color: var(--muted); font-size: 13px; }
+html { background: var(--board); color-scheme: dark; scrollbar-color: var(--line-strong) var(--board); -webkit-text-size-adjust: 100%; }
+body { margin: 0; color: var(--ink); font: 15px/1.5 var(--sans); word-break: keep-all; overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+::selection { background: var(--amber); color: var(--amber-ink); }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
+h1, h2, p, ol, ul, dl, dd { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+img { display: block; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-/* 구단주 4명 합계 : 스크롤해도 항상 위에 고정. 휴대폰 2x2, 넓은 화면 4칸 */
-#owners { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin: 0 -16px; position: sticky; top: 0; z-index: 1;
-  background: var(--line); border-block: 1px solid var(--line); }
-#owners a { background: var(--bg); padding: 8px 16px; color: inherit; text-decoration: none; min-width: 0; }
-#owners span { display: block; }
-#owners .nick { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#owners b { display: block; font-size: 16px; }
-.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 24px; }
-.owner { min-width: 0; scroll-margin-top: 140px; }
-.owner h2 { font-size: 17px; margin-top: 28px; }
-.watch { max-width: 640px; }
-@media (min-width: 900px) { #owners { grid-template-columns: repeat(4, 1fr); } .owner { scroll-margin-top: 80px; } }
-a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--grass); outline-offset: -2px; }
+/* 숫자 : 좁은 고정폭 숫자, 단위(조 억 만)는 작게 */
+.num { font-family: var(--num); font-variant-numeric: tabular-nums lining-nums; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.num i { font: 500 .62em/1 var(--sans); font-style: normal; color: var(--muted); margin: 0 .12em 0 .06em; }
+.na { color: var(--faint); font-family: var(--sans); font-weight: 500; font-size: 13px; }
+.up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--flat); }
+.chg { display: inline-flex; align-items: baseline; gap: 3px; }
+.chg svg { width: .62em; height: .62em; fill: currentColor; align-self: center; flex: none; }
+.chg.down svg { transform: rotate(180deg); }
+.roll { animation: roll .42s var(--ease); }
+@keyframes roll { from { transform: translateY(55%); opacity: 0; filter: blur(3px); } }
 
-.total { padding: 10px 0 6px; }
-.total strong { display: block; font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; }
-.total .chg { font-size: 14px; }
-svg.trend { display: block; width: 100%; height: 72px; margin: 10px 0 2px; }
-svg.trend polyline { fill: none; stroke: var(--grass); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+/* 틀 */
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 52px;
+  padding: 0 max(16px, env(safe-area-inset-left)); background: var(--board); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 800; font-size: 17px; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+.brand img { width: 24px; height: 24px; border-radius: 6px; }
+#stamp { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+#stamp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+#stamp.late { color: var(--amber); } #stamp.late::before { background: var(--amber); }
+.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr;
+  height: calc(var(--dock) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+  background: var(--panel); border-top: 1px solid var(--line); }
+.dock a { display: grid; place-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.dock a[aria-current] { color: var(--amber); }
+main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(safe-area-inset-bottom) + 28px); }
+.foot { color: var(--faint); font-size: 12px; padding: 28px 0 0; }
 
-ul { list-style: none; margin: 14px 0 0; padding: 0; background: var(--surface); border-radius: 10px; }
-li { display: grid; grid-template-columns: 38px 1fr auto; gap: 8px; align-items: center; padding: 11px 12px; }
-li + li { border-top: 1px solid var(--line); }
-.pos { color: var(--muted); font-size: 12px; font-weight: 700; }
-.who { min-width: 0; }
-.who b { font-weight: 600; }
-.who img { height: 15px; vertical-align: -2px; margin-right: 4px; }
-.grade { color: var(--grass); font-weight: 700; font-size: 13px; margin-left: 4px; }
-.sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.price { text-align: right; white-space: nowrap; }
-.price b { display: block; font-weight: 700; }
-.chg { font-size: 12px; color: var(--muted); }
-.up { color: var(--up); } .down { color: var(--down); }
-.note { padding: 14px 2px; margin: 0; }
-.error { color: var(--up); }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding-top: 10px; }
+.bar h1, .bar h2 { font-size: 13px; font-weight: 600; color: var(--muted); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px;
+  border-radius: 8px; border: 1px solid var(--line-strong); background: transparent; font-size: 14px; font-weight: 600;
+  transition: background .16s, border-color .16s, color .16s; }
+.btn:hover { background: var(--raise); }
+.btn:active { background: var(--line); }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn.go { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+.btn.go:hover { background: #FFD061; }
+.btn.quiet { border-color: transparent; color: var(--muted); padding: 0 8px; }
+.btn.quiet[aria-pressed=true] { color: var(--amber); }
 
-form { display: flex; gap: 8px; margin-top: 18px; }
-input, select, .btn { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 8px; padding: 9px 10px; min-height: 42px; }
-input { flex: 1; min-width: 0; font-size: 16px; }  /* 16px 미만이면 아이폰이 화면을 확대함 */
-.btn { cursor: pointer; white-space: nowrap; touch-action: manipulation; }
-.btn.main { background: var(--grass); border-color: var(--grass); color: var(--bg); font-weight: 600; }
-li .act { display: flex; gap: 6px; align-items: center; }
-h2 { font-size: 14px; margin: 22px 2px 0; }
+/* 홈 : 시세판 */
+.board { border-top: 1px solid var(--line-strong); }
+.q { position: relative; border-bottom: 1px solid var(--line); }
+.q-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 14px 0 12px; transition: background .16s; }
+.q-main:hover { background: var(--panel); }
+.q-name { font-size: 17px; font-weight: 700; letter-spacing: -.02em; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-val { font-size: 32px; line-height: 1.05; text-align: right; }
+.q-sub { color: var(--muted); font-size: 13px; }
+.q-chg { display: flex; justify-content: flex-end; gap: 14px; font-size: 15px; }
+.q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); margin-right: 5px; }
+.q-chg .amt { margin-left: 5px; font-weight: 500; }
+.q-line { grid-column: 1 / -1; width: 100%; height: 34px; margin-top: 8px; }
+.q-line path { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.q-err { grid-column: 1 / -1; color: var(--amber); font-size: 13px; }
+.editing .q-main { padding-right: 100px; pointer-events: none; }
+.q-move { position: absolute; right: 0; top: 12px; display: flex; gap: 6px; }
+.q-move .btn { width: 44px; padding: 0; }
+.q-more { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.q-more span:last-child { color: var(--muted); font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+
+/* 상세 머리 */
+.head { display: flex; align-items: center; gap: 4px; min-height: 52px; margin-left: -10px; }
+.head .btn { width: 44px; padding: 0; border-color: transparent; }
+.head h1 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; gap: 7px; min-width: 0; }
+.head h1 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quote { padding: 4px 0 6px; }
+.quote .big { font-size: 40px; line-height: 1.05; }
+.quote .big small { font: 600 14px var(--sans); color: var(--muted); margin-left: 6px; }
+.ago { display: grid; grid-template-columns: auto auto auto 1fr; gap: 2px 12px; margin-top: 10px; font-size: 16px; align-items: baseline; }
+.ago .lbl { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.ago .then { color: var(--flat); }
+
+/* 차트 */
+.chart { margin-top: 18px; }
+.ranges { display: flex; gap: 4px; }
+.ranges button { flex: 1; min-height: 40px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; transition: background .16s, color .16s; }
+.ranges button:hover { color: var(--ink); }
+.ranges button[aria-selected=true] { background: var(--raise); color: var(--amber); }
+.plot { position: relative; margin-top: 8px; touch-action: pan-y; cursor: crosshair; border-radius: 4px; }
+.plot svg { display: block; width: 100%; height: 210px; overflow: visible; }
+.plot .grid { stroke: var(--line); stroke-width: 1; }
+.plot .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.plot text { font: 600 12px var(--num); fill: var(--muted); }
+.plot .cross { stroke: var(--line-strong); stroke-width: 1; }
+.plot [hidden] { display: none; }
+.tip { position: absolute; top: 0; z-index: 1; pointer-events: none; padding: 7px 10px; border-radius: 8px; background: var(--raise);
+  border: 1px solid var(--line-strong); box-shadow: 0 8px 20px -6px rgb(0 0 0 / .6); font-size: 13px; line-height: 1.35; white-space: nowrap; }
+.tip b { display: block; font-size: 19px; }
+.tip .when { color: var(--muted); }
+.plot-empty { display: grid; place-items: center; height: 210px; color: var(--muted); font-size: 14px; text-align: center; padding: 0 24px; }
+.plot-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
+.plot-foot .num { color: var(--flat); font-size: 15px; }
+
+/* 선수 목록 */
+.sorts { display: flex; align-items: center; gap: 2px; margin-right: -8px; }
+.rows { border-top: 1px solid var(--line-strong); }
+.p { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: "face id now" "face d1 d1" "face d7 d7";
+  gap: 3px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); transition: background .16s; }
+a.p:hover { background: var(--panel); }
+.face { grid-area: face; width: 48px; height: 48px; object-fit: contain; object-position: bottom; background: var(--panel); border-radius: 8px; }
+.p-id { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.p-id b { font-weight: 700; font-size: 16px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.season { height: 18px; width: auto; flex: none; }
+.pos { color: var(--muted); font: 600 13px var(--num); flex: none; }
+.ovr-n { color: var(--flat); font-size: 16px; flex: none; }
+.p-now { grid-area: now; font-size: 22px; line-height: 1.2; text-align: right; }
+.p-d { display: grid; grid-template-columns: 44px 1fr 68px 84px; align-items: baseline; font-size: 15px; }
+.p-d.d1 { grid-area: d1; } .p-d.d7 { grid-area: d7; }
+.p-d .lbl { color: var(--muted); font-size: 12px; }
+.p-d .then { color: var(--flat); font-weight: 500; }
+.p-d .chg, .p-d .amt { justify-self: end; }
+.p-d .amt { font-weight: 500; }
+.p-act { grid-area: now; align-self: center; }
+.pending { color: var(--amber); font-size: 13px; grid-area: d1; }
+
+/* 강화 배지 : 게임의 색 단계 (1 회색, 2~4 동, 5~7 은, 8~10 금, 11~13 플래티넘) */
+.g { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 4px; border-radius: 4px; border: 1.5px solid;
+  font: 700 14px/1 var(--num); flex: none; }
+.g1 { color: #c5c8c9; background: linear-gradient(140deg, #51545a, #42464d); border-color: #62676d #393a3c #393a3c #62676d; }
+.g2 { color: #5a2814; background: linear-gradient(140deg, #de946b, #ad5f42); border-color: #e4b7a2 #864229 #864229 #e4b7a2; }
+.g5 { color: #4e545e; background: linear-gradient(140deg, #d8d9dc, #b8bdca); border-color: #d8dadc #a9aaae #a5a8ae #d8dadc; }
+.g8 { color: #695100; background: linear-gradient(140deg, #f9dd62, #dca908); border-color: #e9d36c #cda000 #cda000 #e9d36c; }
+.g11 { color: #2d2b43; background: linear-gradient(140deg, #eef1fd, #a9b9ee 42%, #f3ebfc 68%, #9db0ea); border-color: #bdc5e5 #5274c0 #5274c0 #607dc4; }
+
+/* 선수 상세 */
+.who { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 12px; align-items: center; }
+.who .face { width: 96px; height: 96px; grid-area: auto; }
+.ovr { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+.ovr .num { color: var(--ink); font-size: 17px; margin-left: 4px; }
+section { margin-top: 30px; }
+section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--line-strong); }
+.traits li { padding: 10px 0; border-bottom: 1px solid var(--line); font-weight: 600; }
+.sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px; }
+.stats { columns: 2; column-gap: 20px; }
+.st { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 0 7px; break-inside: avoid;
+  background: linear-gradient(var(--line-strong), var(--line-strong)) left bottom / var(--w) 2px no-repeat, linear-gradient(var(--line), var(--line)) left bottom / 100% 1px no-repeat; }
+.st span { color: var(--muted); font-size: 13px; }
+.st .num { font-size: 18px; color: var(--flat); }
+.st.hi { --bar: var(--ink); background-image: linear-gradient(var(--ink), var(--ink)), linear-gradient(var(--line), var(--line)); }
+.st.hi .num { color: var(--ink); font-weight: 700; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.facts div { display: flex; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.facts dt { color: var(--muted); font-size: 13px; }
+.facts dd { font-weight: 600; text-align: right; }
+.watchbtn { margin-top: 22px; width: 100%; }
+
+/* 관심선수, 검색 */
+.find { display: flex; gap: 8px; margin-top: 6px; }
+.field { flex: 1; min-width: 0; min-height: 46px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel);
+  font-size: 16px; caret-color: var(--amber); transition: border-color .16s; }
+.field::placeholder { color: var(--faint); }
+.field:focus { outline: none; border-color: var(--amber); }
+select.field { flex: none; width: 76px; padding: 0 8px; font-family: var(--num); font-weight: 600; font-size: 17px; }
+label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 22px; }
+.note { color: var(--muted); font-size: 14px; padding: 16px 0; max-width: 62ch; }
+.note b { color: var(--ink); }
+.msg { color: var(--amber); font-size: 14px; padding: 10px 0 0; }
+.res { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.res .p-id { grid-area: auto; }
+.res .p-id small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+details { margin-top: 26px; border-top: 1px solid var(--line-strong); }
+summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 600; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary span { color: var(--muted); font-weight: 500; font-size: 13px; }
+details ol { counter-reset: s; color: var(--muted); font-size: 14px; padding-bottom: 6px; }
+details ol li { counter-increment: s; padding: 3px 0 3px 22px; position: relative; }
+details ol li::before { content: counter(s); position: absolute; left: 0; color: var(--faint); font: 600 14px var(--num); }
+.skel { height: 74px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--panel), var(--panel)) 0 16px / 42% 16px no-repeat, linear-gradient(var(--panel), var(--panel)) 100% 16px / 26% 26px no-repeat; }
+
+@media (min-width: 760px) {
+  main { padding-bottom: 48px; }
+  .top { padding: 0 max(24px, calc((100vw - 728px) / 2)); }
+  .dock { position: static; order: 1; display: flex; gap: 4px; height: auto; padding: 0; background: none; border: 0; }
+  .dock a { display: flex; gap: 6px; padding: 0 12px; min-height: 40px; border-radius: 8px; font-size: 14px; }
+  .dock a:hover { color: var(--ink); }
+  .dock a[aria-current] { background: var(--raise); }
+  #stamp { order: 2; }
+  .q-val { font-size: 38px; }
+  .who { grid-template-columns: minmax(0, 1fr) 128px; }
+  .who .face { width: 128px; height: 128px; }
+  .sum { grid-template-columns: repeat(6, 1fr); }
+  .stats { columns: 3; }
+  .facts { grid-template-columns: repeat(3, 1fr); }
+  .plot svg, .plot-empty { height: 260px; }
+}
+@media (min-width: 1000px) {
+  main { max-width: 1080px; }
+  .top { padding: 0 max(24px, calc((100vw - 1048px) / 2)); }
+  .p { grid-template-columns: 48px minmax(0, 1fr) 100px 270px 270px; grid-template-areas: "face id now d1 d7"; align-items: center; gap: 0 20px; }
+  .p-d { grid-template-columns: 44px 1fr 66px 86px; }
+  .quote .big { font-size: 48px; }
+}
+@media (max-width: 359px) {
+  .p-d { grid-template-columns: 40px 1fr 60px 74px; font-size: 14px; }
+  .q-val { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-board" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M9 6v12"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-upw" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-dnw" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
+</svg>
+<header class="top">
+  <a class="brand" href="#/"><img src="favicon.svg" alt="" width="24" height="24">구단 시세판</a>
+  <nav class="dock" aria-label="주 메뉴">
+    <a href="#/" data-nav="home"><svg class="ico"><use href="#i-board"/></svg>구단</a>
+    <a href="#/watch" data-nav="watch"><svg class="ico"><use href="#i-star"/></svg>관심선수</a>
+  </nav>
+  <span id="stamp" role="status"></span>
+</header>
 <main>
-  <header><h1>구단 시세</h1><span id="updated"></span></header>
-  <nav id="owners" aria-label="구단주별 합계"></nav>
-  <section id="view"><p class="note">불러오는 중</p></section>
-  <p class="note">Data based on NEXON Open API</p>
+  <div id="app"><div class="bar"><h1>불러오는 중</h1></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  <p class="foot">Data based on NEXON Open API</p>
 </main>
 <script>
-const STATIC = false;  // build 가 true 로 바꿈 : 서버 없이 data.json 만 읽는 보기 전용
-let S = null, found = [];
-const $ = id => document.getElementById(id);
+const CDN = 'https://fco.dn.nexoncdn.co.kr/live/externalAssets/common/';
+const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+const LS = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let S = null, NAMES = null, namesLoading = false, namesFailed = false;
+const detail = {};  // 선수 상세 캐시 : key → {at, data | error}
+const ui = { edit: false, sort: 'now', range: {}, q: '', msg: '', busy: false };
 
-// 한국식 단위 : 1조 2,345억 / 18억 5,000만 / 6만 4,100
-function bp(n) {
-  if (n == null) return '불러오는 중';
-  if (!n) return '시세 없음';
-  const parts = [[1e12, '조'], [1e8, '억'], [1e4, '만'], [1, '']]
-    .map(([u, name], i, a) => [Math.floor(n % (a[i - 1]?.[0] ?? Infinity) / u), name])
-    .filter(([v]) => v).map(([v, name]) => v.toLocaleString('ko-KR') + name);
-  return parts.slice(0, 2).join(' ');
+// ---------- 숫자 표기 ----------
+const UNITS = [[1e12, '조'], [1e8, '억'], [1e4, '만']];
+function full(n) {  // 355억 3,600만
+  if (n == null) return '<span class="na">준비 중</span>';
+  if (!n) return '<span class="na">시세 없음</span>';
+  let out = [], r = Math.abs(n);
+  for (const [u, s] of UNITS) { const v = Math.floor(r / u); if (v) { out.push(v.toLocaleString('ko-KR') + `<i>${s}</i>`); r %= u; } }
+  if (r && out.length < 2) out.push(r.toLocaleString('ko-KR'));
+  return out.slice(0, 2).join(' ');
 }
-function chg(now, base, label) {
-  if (!now || !base) return '';
-  const p = (now - base) / base * 100, cls = p > 0.05 ? 'up' : p < -0.05 ? 'down' : '';
-  return `${label} <span class="${cls}">${cls === 'up' ? '▲' : cls === 'down' ? '▼' : ''}${Math.abs(p).toFixed(1)}%</span>`;
+function compact(n) {  // 18.5억
+  if (n == null) return '<span class="na">준비 중</span>';
+  if (!n) return '<span class="na">없음</span>';
+  const a = Math.abs(n);
+  for (const [u, s] of UNITS) if (a >= u) {
+    const v = a / u, d = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+    return (+v.toFixed(d)).toLocaleString('ko-KR') + `<i>${s}</i>`;
+  }
+  return a.toLocaleString('ko-KR');
 }
-const ago = (h, days) => h[h.length - days];  // hist 의 마지막 값이 어제
+// 등락 : 퍼센트와 금액. 색에만 기대지 않도록 세모와 부호를 함께 씀
+function move(now, base, fmt = compact) {
+  if (!now || !base) return ['<span class="chg num flat">-</span>', ''];
+  const diff = now - base, pct = diff / base * 100;
+  const dir = pct > 0.049 ? 'up' : pct < -0.049 ? 'down' : 'flat';
+  const word = { up: '상승', down: '하락', flat: '변동 없음' }[dir];
+  const mark = dir === 'flat' ? '' : '<svg><use href="#i-tri"/></svg>';
+  const p = Math.abs(pct);
+  return [`<span class="chg num ${dir}"><span class="sr">${word}</span>${mark}${p >= 100 ? p.toFixed(0) : p.toFixed(1)}%</span>`,
+          `<span class="amt num ${dir}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${diff ? fmt(diff) : '0'}</span>`];
+}
+const ago = (p, days) => p.hist.at(-days) ?? p.hist[0] ?? p.now;  // hist 의 마지막 값이 어제
+const key = p => `${p.spid}_${p.grade}`;
+const two = n => String(n).padStart(2, '0');
+const clock = t => { const d = new Date(t * 1000); return `${d.getMonth() + 1}.${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`; };
+const gradeBadge = g => `<span class="g g${g >= 11 ? 11 : g >= 8 ? 8 : g >= 5 ? 5 : g >= 2 ? 2 : 1}"><span class="sr">강화 </span>${g}</span>`;
+const face = p => `<img class="face" src="${CDN}playersAction/p${p.spid}.png" data-pid="${p.spid % 1000000}" alt="" width="48" height="48" loading="lazy">`;
+const ident = p => `${gradeBadge(p.grade)}${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="18">` : ''}<b>${esc(p.name)}</b>`;
 
-function row(p, action = '') {
-  return `<li>
-    <span class="pos">${esc(p.pos)}</span>
-    <div class="who">
-      <div>${p.seasonImg ? `<img src="${esc(p.seasonImg)}" alt="">` : ''}<b>${esc(p.name)}</b><span class="grade">${p.grade}강</span></div>
-      <div class="sub">${esc(p.season)}</div>
-    </div>
-    ${action || `<div class="price"><b>${bp(p.now)}</b>
-      <span class="chg">${[chg(p.now, ago(p.hist, 1), '어제보다'), chg(p.now, ago(p.hist, 7), '7일')].filter(Boolean).join(', ')}</span></div>`}
-  </li>`;
+// ---------- 구단 합계 ----------
+function team(players) {
+  const ps = players.filter(p => p.now);
+  const sum = f => ps.reduce((a, p) => a + f(p), 0);
+  const days = ps.length ? Math.min(30, Math.max(...ps.map(p => p.hist.length))) : 0;
+  return { n: ps.length, now: sum(p => p.now), d1: sum(p => ago(p, 1)), d7: sum(p => ago(p, 7)),
+           hist: [...Array(days).keys()].map(i => sum(p => ago(p, days - i))) };
+}
+const day0 = () => { const d = new Date(S.updated * 1000); d.setHours(0, 0, 0, 0); return d / 1000; };
+function dailyPts(values, labels) {  // 일별 값에 시각을 붙이고 현재가를 끝에 더함
+  const n = values.length, base = day0();
+  return values.map((v, i) => ({ t: base - (n - i) * 86400 + 43200, v, lab: labels ? labels[i] : clock(base - (n - i) * 86400).split(' ')[0] }));
+}
+const orderOf = () => { const o = LS.get('order', []); return S.owners.map((x, i) => ({ ...x, i })).sort((a, b) => (o.indexOf(a.nick) + 1 || 99) - (o.indexOf(b.nick) + 1 || 99)); };
+
+// ---------- 차트 ----------
+function chartHTML(id, ranges) {
+  const cur = ranges.some(r => r.id === ui.range[id]) ? ui.range[id] : ranges.find(r => r.best)?.id ?? ranges[0].id;
+  ui.range[id] = cur;
+  return `<div class="chart" data-chart="${id}">
+    <div class="ranges" role="tablist" aria-label="기간">${ranges.map(r => `<button role="tab" aria-selected="${r.id === cur}" data-range="${r.id}">${r.label}</button>`).join('')}</div>
+    <div class="plot" tabindex="0" role="img"></div><div class="plot-foot"></div></div>`;
+}
+const charts = {};
+function drawChart(id, ranges) {
+  const host = document.querySelector(`[data-chart="${id}"]`);
+  if (!host) return;
+  charts[id] = ranges;
+  const r = ranges.find(x => x.id === ui.range[id]), pts = r.pts, plot = host.querySelector('.plot'), foot = host.querySelector('.plot-foot');
+  if (pts.length < 2) {
+    plot.innerHTML = `<div class="plot-empty">${esc(r.note || '이 기간에는 표시할 시세 기록이 아직 없음')}</div>`;
+    plot.setAttribute('aria-label', '기록 없음'); foot.innerHTML = '';
+    return;
+  }
+  const W = plot.clientWidth || 340, H = W >= 600 ? 260 : 210, L = 4, R = 54, T = 14, B = 24;
+  const t0 = pts[0].t, t1 = pts.at(-1).t, vs = pts.map(p => p.v);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  const min = lo, max = hi, pad = (hi - lo || hi * .02) * .12; lo -= pad; hi += pad;
+  const X = t => L + (t - t0) / (t1 - t0 || 1) * (W - L - R), Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const dir = vs.at(-1) > vs[0] ? 'up' : vs.at(-1) < vs[0] ? 'down' : 'flat';
+  const d = pts.map((p, i) => i ? (r.step ? `H${X(p.t).toFixed(1)}V${Y(p.v).toFixed(1)}` : `L${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`) : `M${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`).join('');
+  const ticks = max === min ? [max] : [max, (max + min) / 2, min];
+  plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${W - R + 8}" y="${Y(v) + 4}">${compact(v).replace(/<[^>]+>/g, '')}</text>`).join('')}
+    <path d="${d}L${X(t1)} ${H - B}L${X(t0)} ${H - B}Z" fill="var(--${dir})" opacity=".1"/>
+    <path class="series" d="${d}" stroke="var(--${dir})"/>
+    <text x="${L}" y="${H - 6}">${esc(pts[0].lab)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(pts.at(-1).lab)}</text>
+    <g class="hover" hidden><line class="cross" y1="${T}" y2="${H - B}"/><circle r="4.5" fill="var(--board)" stroke="var(--${dir})" stroke-width="2.5"/></g>
+  </svg><div class="tip" hidden></div>`;
+  const [pc, amt] = move(vs.at(-1), vs[0]);
+  plot.setAttribute('aria-label', `${r.label} 시세 추이. 최저 ${compact(min).replace(/<[^>]+>/g, '')}, 최고 ${compact(max).replace(/<[^>]+>/g, '')}`);
+  foot.innerHTML = `<span>기간 등락 ${pc} ${amt}</span><span>최저 <span class="num">${compact(min)}</span>   최고 <span class="num">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
+  plot._pts = pts; plot._geo = { X, Y, W, L, R }; plot._i = pts.length - 1;
+}
+function hoverChart(plot, i) {
+  const pts = plot._pts, g = plot.querySelector('.hover'), tip = plot.querySelector('.tip');
+  if (!pts || !g) return;
+  if (i == null) { g.setAttribute('hidden', ''); tip.hidden = true; return; }
+  plot._i = i = Math.max(0, Math.min(pts.length - 1, i));
+  const p = pts[i], { X, Y, W, R } = plot._geo, x = X(p.t), [pc, amt] = move(p.v, pts[0].v);
+  g.removeAttribute('hidden');
+  g.querySelector('line').setAttribute('x1', x); g.querySelector('line').setAttribute('x2', x);
+  g.querySelector('circle').setAttribute('cx', x); g.querySelector('circle').setAttribute('cy', Y(p.v));
+  tip.hidden = false;
+  tip.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b>${i ? `처음보다 ${pc} ${amt}` : '기간의 처음'}`;
+  tip.style.left = Math.max(0, Math.min(W - R - tip.offsetWidth, x - tip.offsetWidth / 2)) + 'px';
+}
+function nearest(plot, clientX) {
+  const { X } = plot._geo, x = clientX - plot.getBoundingClientRect().left, pts = plot._pts;
+  let best = 0;
+  pts.forEach((p, i) => { if (Math.abs(X(p.t) - x) < Math.abs(X(pts[best].t) - x)) best = i; });
+  return best;
 }
 
-// 선수별 30일 시세를 날짜별로 더한 구단 가치 추이 (오늘 포함)
-function totals(players) {
-  const priced = players.filter(p => p.now);
-  const days = Math.min(30, ...priced.map(p => p.hist.length));
-  if (!priced.length || !isFinite(days)) return [];
-  const sum = f => priced.reduce((a, p) => a + f(p), 0);
-  return [...Array(days).keys()].map(i => sum(p => ago(p.hist, days - i))).concat(sum(p => p.now));
+// ---------- 화면 ----------
+const bigPrice = now => `<div class="big num" data-roll="big">${full(now)}${now ? '<small>BP</small>' : ''}</div>`;
+function agoBlock(now, d1, d7) {
+  const [p1, a1] = move(now, d1, full), [p7, a7] = move(now, d7, full);
+  return `<div class="ago"><span class="lbl">1일 전</span><span class="then num">${d1 ? full(d1) : '-'}</span>${p1}${a1}
+    <span class="lbl">7일 전</span><span class="then num">${d7 ? full(d7) : '-'}</span>${p7}${a7}</div>`;
 }
-function summary(players, label) {
-  const t = totals(players);
-  if (!t.length) return '';
-  const now = t[t.length - 1], lo = Math.min(...t), hi = Math.max(...t), span = hi - lo || 1;
-  const pts = t.map((v, i) => `${(i / (t.length - 1 || 1) * 300).toFixed(1)},${(66 - (v - lo) / span * 60).toFixed(1)}`).join(' ');
-  return `<div class="total"><span class="sub">${label}</span><strong>${bp(now)} BP</strong>
-      <span class="chg">${[chg(now, t[t.length - 2], '어제보다'), chg(now, t[t.length - 8], '7일 전보다')].filter(Boolean).join(', ')}</span></div>
-    <svg class="trend" viewBox="0 0 300 72" preserveAspectRatio="none" role="img" aria-label="최근 ${t.length - 1}일 가치 추이"><polyline points="${pts}"/></svg>
-    <div class="axis"><span>${t.length - 1}일 전 ${bp(t[0])}</span><span>최저 ${bp(lo)}, 최고 ${bp(hi)}</span></div>`;
+function playerRow(p, extra = '') {
+  const cell = (days, cls) => { const then = ago(p, days), [pc, amt] = move(p.now, p.hist.length ? then : 0);
+    return `<span class="p-d ${cls}"><span class="lbl">${days}일 전</span><span class="then num">${p.hist.length ? compact(then) : '-'}</span>${pc}${amt}</span>`; };
+  return `<li><a class="p" href="#/p/${p.spid}/${p.grade}">${face(p)}
+    <span class="p-id">${ident(p)}${p.ovr ? `<span class="ovr-n num"><span class="sr">오버롤 </span>${p.ovr}</span>` : ''}${p.pos ? `<span class="pos">${esc(p.pos)}</span>` : ''}</span>
+    <span class="p-now num" data-roll="${key(p)}">${compact(p.now)}</span>
+    ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`;
+}
+const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
+function playerList(players) {
+  const f = SORTS[ui.sort][1];
+  return `<div class="bar"><h2>선수 ${players.length}명</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
+      `<button class="btn quiet" data-sort="${k}" aria-pressed="${k === ui.sort}">${label}순</button>`).join('')}</div></div>
+    <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p)).join('')}</ol>`;
 }
 
+function viewHome() {
+  const rows = orderOf().map((o, at, all) => {
+    const t = team(o.players), [p1, a1] = move(t.now, t.d1), [p7, a7] = move(t.now, t.d7);
+    const h = [...t.hist, t.now], lo = Math.min(...h), hi = Math.max(...h);
+    const line = h.length > 2 ? `<svg class="q-line" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path stroke="var(--${h.at(-1) > h[0] ? 'up' : h.at(-1) < h[0] ? 'down' : 'flat'})" d="${
+      h.map((v, i) => `${i ? 'L' : 'M'}${(i / (h.length - 1) * 100).toFixed(2)} ${(31 - (v - lo) / (hi - lo || 1) * 28).toFixed(2)}`).join('')}"/></svg>` : '';
+    return `<li class="q"><a class="q-main" href="#/o/${o.i}">
+        <span class="q-name">${esc(o.nick)}</span>
+        <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
+        <span class="q-sub">${o.players.length ? `선수 ${o.players.length}명, ${esc((o.match || '').slice(5, 10).replace('-', '.'))} 경기` : '최근 경기 기록 없음'}</span>
+        <span class="q-chg"><span><span class="lbl">1일</span>${p1}${a1}</span><span><span class="lbl">7일</span>${p7}</span></span>
+        ${o.error ? `<span class="q-err">${esc(o.error)}</span>` : ''}${line}</a>
+      ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
+        <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
+  }).join('');
+  const w = watchList();
+  return `<div class="bar"><h1>구단 가치 (BP), 최근 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
+    <ol class="board ${ui.edit ? 'editing' : ''}">${rows}</ol>
+    <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
+}
+
+function viewOwner(i) {
+  const o = S.owners[i];
+  if (!o) return notFound('없는 구단주');
+  const t = team(o.players), pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
+  const ranges = [{ id: '7d', label: '7일', pts: pts.slice(-8) }, { id: '30d', label: '30일', pts, best: true }];
+  after = () => drawChart('team', ranges);
+  return `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
+    ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
+    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}</div>` + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
+    ${o.players.length ? playerList(o.players) : ''}
+    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐</p>`;
+}
+
+function playerRanges(d) {
+  const now = S.updated, cur = d.now ? [{ t: now, v: d.now, lab: '현재' }] : [];
+  const intra = d.intra.map(([t, v]) => ({ t, v, lab: clock(t) }));
+  const since = intra.length ? `시간대별 기록은 ${clock(intra[0].t)}부터 쌓는 중` : '시간대별 기록을 쌓기 시작함';
+  const win = (hours) => {  // 창 시작 시점의 값을 이어 붙여 선이 창 왼쪽 끝에서 시작하게 함
+    const start = now - hours * 3600, inside = intra.filter(p => p.t >= start), before = intra.filter(p => p.t < start).at(-1);
+    const pts = [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...inside, ...cur];
+    return { pts, step: true, note: before ? '' : since };
+  };
+  const daily = dailyPts(d.daily, d.days), covers7 = intra.length && intra[0].t <= now - 6 * 86400, span = intra.length ? now - intra[0].t : 0;
+  return [
+    { id: '3h', label: '3시간', ...win(3) },
+    { id: '24h', label: '24시간', ...win(24), best: span >= 3 * 3600 },
+    covers7 ? { id: '7d', label: '7일', ...win(168) } : { id: '7d', label: '7일', pts: [...daily.slice(-7), ...cur] },
+    { id: '30d', label: '30일', pts: [...daily.slice(-30), ...cur], best: span < 3 * 3600 },
+    { id: 'all', label: daily.length >= 360 ? '1년' : '전체', pts: [...daily, ...cur] },
+  ];
+}
+function viewPlayer(spid, grade) {
+  const k = `${spid}_${grade}`, c = detail[k];
+  if (!c || c.at !== S.updated) {
+    fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
+      .catch(() => { detail[k] = { at: S.updated, error: true }; render(); });
+    if (!c?.data) return `<div class="head"><button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button><h1>불러오는 중</h1></div><div class="skel"></div><div class="skel"></div>`;
+  }
+  const d = detail[k].data, saved = watchList().some(w => key(w) === k);
+  const back = `<button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button>`;
+  if (!d) return `<div class="head">${back}<h1>추적하지 않는 선수</h1></div>
+    <p class="note">이 선수는 아직 시세를 받아오지 않음. 구단 명단에 있거나 관심선수로 저장된 선수만 추적함. 방금 저장했다면 1~2분 뒤에 다시 열면 됨</p>
+    <a class="btn" href="#/watch">관심선수에서 찾아 저장</a>`;
+  const ranges = playerRanges(d), f = d.info || {};
+  after = () => drawChart('player', ranges);
+  const st = ([n, v]) => `<div class="st ${v >= 130 ? 'hi' : ''}" style="--w:${Math.min(100, v / 1.5).toFixed(0)}%"><span>${esc(n)}</span><b class="num">${v}</b></div>`;
+  const facts = [['급여', f.pay], ['키', f.height], ['몸무게', f.weight], ['체형', f.body], ['주발', f.foot], ['개인기', f.skill ? f.skill + '성' : ''],
+                 ['명성', f.fame], ['국적', f.nation], ['소속', f.team], ['생년월일', f.birth]].filter(x => x[1]);
+  return `<div class="head">${back}<h1>${ident(d)}</h1></div>
+    <div class="who quote"><div>${bigPrice(d.now)}
+      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
+      ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
+    ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
+    ${chartHTML('player', ranges)}
+    ${f.traits?.length ? `<section><h2>특성</h2><ul class="traits">${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>` : ''}
+    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강 기준)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
+      <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(st).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
+    ${facts.length ? `<section><h2>선수 정보</h2><dl class="facts">${facts.map(([a, b]) => `<div><dt>${a}</dt><dd>${esc(b)}</dd></div>`).join('')}</dl></section>` : ''}
+    <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? '관심선수에서 빼기' : '관심선수로 저장'}</button>
+    ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}`;
+}
+
+// ---------- 관심선수 : 저장소의 watchlist.json 을 고침 (편집용 토큰 필요) ----------
+function watchList() {  // 방금 저장한 내용은 다음 갱신 전까지 이 기기에서 먼저 보여 줌
+  const o = LS.get('watchOverride', null), now = Date.now() / 1000;
+  if (!o || now - o.at > 900) return S.watch;
+  const have = Object.fromEntries(S.watch.map(w => [key(w), w]));
+  if (o.list.length === S.watch.length && o.list.every(w => have[key(w)])) { LS.set('watchOverride', null); return S.watch; }
+  return o.list.map(w => have[key(w)] || { ...w, pos: '', now: null, hist: [], pending: true });
+}
+async function saveWatch(change, entry) {
+  const token = LS.get('token', '');
+  if (!token) { ui.msg = '저장하려면 편집용 토큰이 필요함. 관심선수 화면 아래의 "편집용 토큰"에서 한 번 넣어 두면 됨'; ui.needToken = true; return render(); }
+  ui.busy = true; ui.msg = ''; render();
+  try {
+    const url = `https://api.github.com/repos/${S.repo}/contents/watchlist.json`, headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
+    const cur = await fetch(url, { headers, cache: 'no-store' });
+    if (cur.status === 401) throw new Error('토큰이 만료되었거나 맞지 않음. 편집용 토큰을 다시 넣어야 함');
+    if (!cur.ok) throw new Error('이 토큰으로는 저장소에 접근할 수 없음. 토큰을 만들 때 저장소와 Contents 권한을 확인해야 함');
+    const file = await cur.json(), list = change(JSON.parse(atob(file.content.replace(/\s/g, ''))));
+    const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message: '관심선수 변경', content: btoa(JSON.stringify(list)), sha: file.sha }) });
+    if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 토큰에 Contents 쓰기 권한이 있는지 확인해야 함');
+    const known = Object.fromEntries([...watchList(), ...(entry ? [entry] : [])].map(w => [key(w), w]));
+    LS.set('watchOverride', { at: Date.now() / 1000, list: list.map(w => { const c = known[key(w)] || w; return { spid: w.spid, grade: w.grade, name: c.name || String(w.spid), season: c.season || '', seasonImg: c.seasonImg || '' }; }) });
+    ui.msg = entry ? '저장함. 시세는 1~2분 뒤에 표시됨' : '관심선수에서 뺌';
+  } catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
+  ui.busy = false; render();
+}
+const without = k => list => list.filter(w => key(w) !== k);
+const withEntry = e => list => [...without(key(e))(list), { spid: e.spid, grade: e.grade }];
+
+function search(q) {
+  q = q.replace(/\s/g, '').toLowerCase();
+  if (!q || !NAMES) return [];
+  const out = [];
+  for (const [pid, [name, seasons]] of Object.entries(NAMES.players)) {
+    const n = name.replace(/\s/g, '').toLowerCase();
+    if (!n.includes(q)) continue;
+    for (const s of seasons) out.push({ spid: s * 1000000 + +pid, name, season: NAMES.seasons[s]?.[0] || '', seasonImg: NAMES.seasons[s]?.[1] || '', exact: n === q });
+  }
+  return out.sort((a, b) => b.exact - a.exact || b.spid - a.spid).slice(0, 80);
+}
+function viewWatch() {
+  const list = watchList(), token = LS.get('token', ''), found = search(ui.q);
+  const need = ui.q && !NAMES;
+  return `<div class="bar"><h1>관심선수 ${list.length}명</h1></div>
+    ${list.length ? `<ol class="rows">${list.map(p => playerRow(p)).join('')}</ol>` : '<p class="note"><b>아직 저장한 선수가 없음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>'}
+    <label class="lab" for="q">선수 찾기</label>
+    <form class="find" data-find><input class="field" id="q" type="search" value="${esc(ui.q)}" placeholder="예 : 손흥민" autocomplete="off" enterkeyhint="search"><button class="btn go">찾기</button></form>
+    ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
+    ${need ? '<p class="note">선수 목록을 불러오는 중</p>' : ui.q && !found.length ? '<p class="note">그 이름의 선수를 찾지 못함. 게임에 표시되는 한글 이름으로 다시 찾아보면 됨</p>' : ''}
+    ${found.length ? `<div class="bar"><h2>검색 결과 ${found.length}건${found.length === 80 ? ' (더 있음. 이름을 더 길게 입력)' : ''}</h2></div><ol class="rows">${found.map((p, i) => `<li class="res">
+        <span class="p-id">${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="" height="18" loading="lazy">` : ''}<b>${esc(p.name)}</b><small>${esc(p.season)}</small></span>
+        <select class="field" id="g${i}" aria-label="${esc(p.name)} 강화 단계">${[...Array(13).keys()].map(g => `<option value="${g + 1}">${g + 1}강</option>`).join('')}</select>
+        <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
+    <details ${ui.needToken ? 'open' : ''}><summary>편집용 토큰<span>${token ? '이 기기에 저장됨' : '저장하려면 필요함'}</span></summary>
+      <p class="note">이 페이지는 누구나 볼 수 있지만, 관심선수를 바꾸는 것은 토큰을 가진 사람만 할 수 있음. 토큰은 이 기기에만 보관됨</p>
+      <ol><li>GitHub 로그인 후 Settings, Developer settings, Fine-grained tokens 로 이동</li><li>Repository access 에서 ${esc(S.repo.split('/')[1])} 저장소만 선택</li><li>Permissions 의 Contents 를 Read and write 로 설정하고 토큰 생성</li><li>만들어진 토큰을 아래에 붙여넣기</li></ol>
+      <form class="find" data-token><input class="field" id="tok" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="편집용 토큰" value="${esc(token)}"><button class="btn">${token ? '바꾸기' : '넣기'}</button></form>
+    </details>`;
+}
+const notFound = what => `<div class="bar"><h1>${what}</h1></div><a class="btn" href="#/">구단 목록으로</a>`;
+
+// ---------- 그리기 ----------
+let after = null;
+const rolled = {};
 function render() {
   if (!S) return;
-  $('updated').textContent = S.updated ? new Date(S.updated * 1000).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}) + ' 갱신' : '첫 갱신 중';
-  $('owners').innerHTML = S.owners.map((o, i) => {
-    const t = totals(o.players), now = t[t.length - 1];
-    return `<a href="#o${i}"><span class="nick">${esc(o.nick)}</span><b>${t.length ? bp(now) : '명단 없음'}</b>
-      <span class="chg">${chg(now, t[t.length - 2], '어제보다') || '&nbsp;'}</span></a>`;
-  }).join('');
-  const q = $('q')?.value ?? '';
-  $('view').innerHTML = `<div class="cols">${S.owners.map((o, i) => `<section class="owner" id="o${i}"><h2>${esc(o.nick)}</h2>`
-      + (o.error ? `<p class="note error">${esc(o.error)}</p>` : '')
-      + summary(o.players, `최근 경기(${esc((o.match || '').slice(0, 10))}) 출전 ${o.players.length}명 합계`)
-      + (o.players.length ? `<ul>${o.players.map(p => row(p)).join('')}</ul>` : '') + '</section>').join('')}</div>`
-    + '<section class="owner watch" id="watch"><h2>관심선수</h2>'
-    + summary(S.watch, `관심선수 ${S.watch.length}명 합계`)
-    + (S.watch.length ? `<ul>${S.watch.map(p => row({...p, pos: ''}).replace('</li>', STATIC ? '</li>' : `<button class="btn" data-del="${p.spid},${p.grade}" aria-label="${esc(p.name)} 삭제">삭제</button></li>`)).join('')}</ul>`
-       : `<p class="note">아직 관심선수가 없음${STATIC ? '' : '. 아래에서 이름으로 찾아 추가'}</p>`)
-    + (STATIC ? '' : `<form id="find"><input id="q" type="search" placeholder="선수 이름" value="${esc(q)}" autocomplete="off" enterkeyhint="search"><button class="btn main">찾기</button></form>`
-    + (found.length ? `<h2>검색 결과 ${found.length}건</h2><ul>${found.map((p, i) => row({...p, pos: ''}, `<div class="act">
-        <select aria-label="강화 단계" id="g${i}">${[...Array(13).keys()].map(g => `<option>${g + 1}</option>`).join('')}</select>
-        <button class="btn" data-add="${i}">추가</button></div>`).replace(/<span class="grade">.*?<\/span>/, '')).join('')}</ul>` : ''))
-    + '</section>';
+  const [, view, a, b] = location.hash.split('/');
+  after = null;
+  if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
+  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b) : view === 'watch' ? viewWatch() : viewHome();
+  document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (view === 'watch' ? 'watch' : 'home')));
+  document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : '구단 시세판';
+  after?.();
+  document.querySelectorAll('[data-roll]').forEach(el => {  // 값이 바뀐 숫자만 넘어오며 바뀜
+    const k = location.hash + el.dataset.roll, v = el.textContent;
+    if (rolled[k] != null && rolled[k] !== v) el.classList.add('roll');
+    rolled[k] = v;
+  });
+  stamp();
 }
-
-async function api(path, body) {
-  const r = await fetch(path, body && {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-  if (!r.ok) throw new Error((await r.json()).error);
-  return r.json();
+function stamp() {
+  if (!S) return;
+  const min = Math.max(0, Math.round((Date.now() / 1000 - S.updated) / 60)), el = $('#stamp');
+  el.textContent = min < 1 ? '방금 갱신' : min < 60 ? `${min}분 전 갱신` : `${Math.floor(min / 60)}시간 전 갱신`;
+  el.classList.toggle('late', min >= 40);
+  el.title = clock(S.updated) + ' 기준';
 }
 async function load() {
-  // 검색어를 입력 중일 때는 화면을 다시 그리지 않음
-  try { S = await api(STATIC ? 'data.json?t=' + Date.now() : '/api/state'); if (document.activeElement?.id !== 'q') render(); }
-  catch { $('updated').textContent = STATIC ? '시세 파일을 불러오지 못함. 잠시 뒤 새로고침' : '연결 끊김. 맥에서 app.py 가 켜져 있는지 확인'; }
+  try {
+    const r = await fetch('data.json?t=' + Date.now());
+    if (!r.ok) throw 0;
+    const fresh = await r.json(), changed = !S || fresh.updated !== S.updated;
+    S = fresh;
+    if (changed && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)) render(); else stamp();
+  } catch {
+    if (!S) $('#app').innerHTML = '<div class="bar"><h1>시세를 불러오지 못함</h1></div><p class="note">인터넷 연결을 확인한 뒤 다시 시도하면 됨</p><button class="btn" data-reload>다시 시도</button>';
+  }
+}
+async function loadNames() {
+  if (NAMES || namesLoading || namesFailed) return;
+  namesLoading = true;
+  try { NAMES = await (await fetch('names.json')).json(); } catch { namesFailed = true; ui.msg = '선수 목록을 불러오지 못함. 잠시 뒤 다시 찾아보면 됨'; }
+  namesLoading = false; render();
 }
 
-document.addEventListener('click', async e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.add) { const p = found[b.dataset.add]; S = await api('/api/watch', {spid: p.spid, grade: +$('g' + b.dataset.add).value}); found = []; render(); }
-  if (b.dataset.del) { const [spid, grade] = b.dataset.del.split(','); S = await api('/api/unwatch', {spid: +spid, grade: +grade}); render(); }
+// ---------- 동작 ----------
+document.addEventListener('click', e => {
+  const b = e.target.closest('button, [role=tab]'); if (!b) return;
+  const d = b.dataset;
+  if ('edit' in d) { ui.edit = !ui.edit; render(); }
+  else if (d.move) { const names = orderOf().map(o => o.nick), i = names.indexOf(d.nick), j = i + +d.move; [names[i], names[j]] = [names[j], names[i]]; LS.set('order', names); render();
+    document.querySelector(`[data-nick="${CSS.escape(d.nick)}"][data-move="${d.move}"]:not([disabled])`)?.focus(); }
+  else if (d.sort) { ui.sort = d.sort; render(); }
+  else if (d.range) { const id = b.closest('[data-chart]').dataset.chart; ui.range[id] = d.range;
+    b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b)); drawChart(id, charts[id]); }
+  else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
+  else if ('reload' in d) load();
+  else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(withEntry({ ...p, grade }), { ...p, grade }); }
+  else if (d.toggle) { const [spid, grade] = d.toggle.split('_').map(Number), entry = { spid, grade, name: d.name, season: d.season, seasonImg: d.img };
+    watchList().some(w => key(w) === d.toggle) ? saveWatch(without(d.toggle)) : saveWatch(withEntry(entry), entry); }
 });
-document.addEventListener('submit', async e => {
+document.addEventListener('submit', e => {
   e.preventDefault();
-  found = await api('/api/search?q=' + encodeURIComponent($('q').value));
-  render();
-  if (!found.length) $('view').insertAdjacentHTML('beforeend', '<p class="note">그 이름의 선수를 찾지 못함. 게임에 표시되는 한글 이름으로 다시 검색</p>');
+  if ('find' in e.target.dataset) { const q = $('#q').value.trim(); $('#q').blur(); location.hash = '#/watch' + (q ? '/' + encodeURIComponent(q) : ''); }
+  if ('token' in e.target.dataset) { LS.set('token', $('#tok').value.trim()); ui.msg = $('#tok').value.trim() ? '토큰을 이 기기에 넣어 둠' : '토큰을 지움'; render(); }
 });
+// 차트 : 마우스를 올리거나 손가락으로 훑으면 그 시점의 값, 방향키로도 이동
+for (const type of ['pointermove', 'pointerdown']) document.addEventListener(type, e => { const plot = e.target.closest?.('.plot'); if (plot?._pts) hoverChart(plot, nearest(plot, e.clientX)); });
+document.addEventListener('pointerout', e => { const plot = e.target.closest?.('.plot'); if (plot && e.pointerType === 'mouse' && !plot.contains(e.relatedTarget)) hoverChart(plot, null); });
+document.addEventListener('keydown', e => { const plot = e.target.closest?.('.plot'); if (!plot?._pts) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); hoverChart(plot, plot._i + (e.key === 'ArrowLeft' ? -1 : 1)); }
+  if (e.key === 'Escape') hoverChart(plot, null); });
+document.addEventListener('error', e => { const img = e.target;  // 선수 사진 : 동작 사진이 없으면 얼굴 사진, 그것도 없으면 빈 칸
+  if (!img.classList?.contains('face')) return;
+  if (!img.dataset.fb) { img.dataset.fb = 1; img.src = `${CDN}players/p${img.dataset.pid}.png`; } else img.style.visibility = 'hidden'; }, true);
+addEventListener('hashchange', () => { ui.msg = ''; ui.edit = false; ui.needToken = false; namesFailed = false; render(); scrollTo(0, 0); });
+addEventListener('resize', () => Object.entries(charts).forEach(([id, r]) => drawChart(id, r)));
 document.addEventListener('visibilitychange', () => document.hidden || load());
 setInterval(load, 60000);
 load();
