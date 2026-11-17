@@ -31,6 +31,7 @@ REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 
 SQUAD_MIN = 60  # 명단 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
+GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
 DATACENTER = "https://fconline.nexon.com/datacenter/"
 
@@ -132,8 +133,8 @@ def parse_info(html):
     }
 
 
-def datacenter(page, spid, grade):
-    data = urllib.parse.urlencode({"spid": spid, "n1strong": grade}).encode()
+def datacenter(page, spid, grade, **extra):
+    data = urllib.parse.urlencode({"spid": spid, "n1strong": grade, **extra}).encode()
     return get(DATACENTER + page, data).decode(errors="replace")
 
 
@@ -214,8 +215,10 @@ def build():
             prices[k] = parse_price(datacenter("PlayerPriceGraph", *k))
             if prices[k]["now"]:
                 add_intra(key, now, prices[k]["now"])
-            if now - STATE["info"].get(key, {}).get("at", 0) >= INFO_DAYS * 86400:
-                STATE["info"][key] = {**parse_info(datacenter("PlayerAbility", *k)), "at": now}
+            info = STATE["info"].get(key, {})
+            if now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW:
+                page = datacenter("PlayerAbility", *k, n1Grow=GROW)
+                STATE["info"][key] = {**parse_info(page), "at": now, "grow": GROW}
         except Exception as e:
             print("데이터센터 조회 실패", k, e, file=sys.stderr)
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
@@ -244,7 +247,7 @@ def build():
         players.setdefault(spid % 1000000, [name, []])[1].append(spid // 1000000)
     write("names.json", {"players": players, "seasons": {
         i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}})
-    for name in ("index.html", "favicon.svg", "icon-180.png"):
+    for name in ("index.html", "favicon.png", "icon-180.png"):
         (SITE / name).write_bytes((ROOT / name).read_bytes())
     print(time.strftime("%H:%M"), "생성 완료 : 시세", len(prices), "건")
 

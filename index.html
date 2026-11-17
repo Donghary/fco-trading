@@ -9,7 +9,7 @@
 <meta name="description" content="FC온라인 네 구단의 구단 가치와 선수 시세를 한 판에서 봄">
 <meta property="og:title" content="구단 시세판">
 <meta property="og:description" content="FC온라인 네 구단의 구단 가치와 선수 시세">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -55,7 +55,7 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 52px;
   padding: 0 max(16px, env(safe-area-inset-left)); background: var(--board); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 800; font-size: 17px; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
-.brand img { width: 24px; height: 24px; border-radius: 6px; }
+.brand img { width: 26px; height: 26px; }
 #stamp { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 #stamp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 #stamp.late { color: var(--amber); } #stamp.late::before { background: var(--amber); }
@@ -119,11 +119,12 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .ranges button:hover { color: var(--ink); }
 .ranges button[aria-selected=true] { background: var(--raise); color: var(--amber); }
 .plot { position: relative; margin-top: 8px; touch-action: pan-y; cursor: crosshair; border-radius: 4px; }
-.plot svg { display: block; width: 100%; height: 210px; overflow: visible; }
+.plot > svg { display: block; width: 100%; height: 210px; overflow: visible; }
 .plot .grid { stroke: var(--line); stroke-width: 1; }
 .plot .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .plot text { font: 600 12px var(--num); fill: var(--muted); }
 .plot .cross { stroke: var(--line-strong); stroke-width: 1; }
+.plot .base { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 5; }
 .plot [hidden] { display: none; }
 .tip { position: absolute; top: 0; z-index: 1; pointer-events: none; padding: 7px 10px; border-radius: 8px; background: var(--raise);
   border: 1px solid var(--line-strong); box-shadow: 0 8px 20px -6px rgb(0 0 0 / .6); font-size: 13px; line-height: 1.35; white-space: nowrap; }
@@ -171,7 +172,9 @@ a.p:hover { background: var(--panel); }
 .ovr .num { color: var(--ink); font-size: 17px; margin-left: 4px; }
 section { margin-top: 30px; }
 section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--line-strong); }
-.traits li { padding: 10px 0; border-bottom: 1px solid var(--line); font-weight: 600; }
+.traits { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
+.traits li { padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 13px; font-weight: 600; }
+.traits li:first-child { border: 0; padding-left: 0; color: var(--muted); font-weight: 500; }
 .sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px; }
 .stats { columns: 2; column-gap: 20px; }
 .st { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 0 7px; break-inside: avoid;
@@ -223,7 +226,7 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
   .sum { grid-template-columns: repeat(6, 1fr); }
   .stats { columns: 3; }
   .facts { grid-template-columns: repeat(3, 1fr); }
-  .plot svg, .plot-empty { height: 260px; }
+  .plot > svg, .plot-empty { height: 260px; }
 }
 @media (min-width: 1000px) {
   main { max-width: 1080px; }
@@ -250,7 +253,7 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
   <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
 </svg>
 <header class="top">
-  <a class="brand" href="#/"><img src="favicon.svg" alt="" width="24" height="24">구단 시세판</a>
+  <a class="brand" href="#/"><img src="favicon.png" alt="" width="24" height="24">구단 시세판</a>
   <nav class="dock" aria-label="주 메뉴">
     <a href="#/" data-nav="home"><svg class="ico"><use href="#i-board"/></svg>구단</a>
     <a href="#/watch" data-nav="watch"><svg class="ico"><use href="#i-star"/></svg>관심선수</a>
@@ -357,13 +360,14 @@ function drawChart(id, ranges) {
   plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
     ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${W - R + 8}" y="${Y(v) + 4}">${compact(v).replace(/<[^>]+>/g, '')}</text>`).join('')}
     <path d="${d}L${X(t1)} ${H - B}L${X(t0)} ${H - B}Z" fill="var(--${dir})" opacity=".1"/>
+    <line class="base" x1="${L}" x2="${W - R}" y1="${Y(vs[0])}" y2="${Y(vs[0])}"/>
     <path class="series" d="${d}" stroke="var(--${dir})"/>
     <text x="${L}" y="${H - 6}">${esc(pts[0].lab)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(pts.at(-1).lab)}</text>
     <g class="hover" hidden><line class="cross" y1="${T}" y2="${H - B}"/><circle r="4.5" fill="var(--board)" stroke="var(--${dir})" stroke-width="2.5"/></g>
   </svg><div class="tip" hidden></div>`;
   const [pc, amt] = move(vs.at(-1), vs[0]);
   plot.setAttribute('aria-label', `${r.label} 시세 추이. 최저 ${compact(min).replace(/<[^>]+>/g, '')}, 최고 ${compact(max).replace(/<[^>]+>/g, '')}`);
-  foot.innerHTML = `<span>기간 등락 ${pc} ${amt}</span><span>최저 <span class="num">${compact(min)}</span>   최고 <span class="num">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
+  foot.innerHTML = `<span>${esc(pts[0].lab)}보다 ${pc} ${amt}</span><span>최저 <span class="num">${compact(min)}</span>   최고 <span class="num">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
   plot._pts = pts; plot._geo = { X, Y, W, L, R }; plot._i = pts.length - 1;
 }
 function hoverChart(plot, i) {
@@ -376,7 +380,7 @@ function hoverChart(plot, i) {
   g.querySelector('line').setAttribute('x1', x); g.querySelector('line').setAttribute('x2', x);
   g.querySelector('circle').setAttribute('cx', x); g.querySelector('circle').setAttribute('cy', Y(p.v));
   tip.hidden = false;
-  tip.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b>${i ? `처음보다 ${pc} ${amt}` : '기간의 처음'}`;
+  tip.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b>${i ? `${esc(pts[0].lab)}보다 ${pc} ${amt}` : '이 기간의 시작 값'}`;
   tip.style.left = Math.max(0, Math.min(W - R - tip.offsetWidth, x - tip.offsetWidth / 2)) + 'px';
 }
 function nearest(plot, clientX) {
@@ -483,9 +487,9 @@ function viewPlayer(spid, grade) {
       ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
       ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
     ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
+    ${f.traits?.length ? `<ul class="traits"><li>특성</li>${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
     ${chartHTML('player', ranges)}
-    ${f.traits?.length ? `<section><h2>특성</h2><ul class="traits">${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>` : ''}
-    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강 기준)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
+    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, 적응도 5 기준. 팀컬러 미반영)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
       <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(st).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
     ${facts.length ? `<section><h2>선수 정보</h2><dl class="facts">${facts.map(([a, b]) => `<div><dt>${a}</dt><dd>${esc(b)}</dd></div>`).join('')}</dl></section>` : ''}
     <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? '관심선수에서 빼기' : '관심선수로 저장'}</button>
