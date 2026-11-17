@@ -88,9 +88,10 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-name { font-size: 17px; font-weight: 700; letter-spacing: -.02em; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-val { font-size: 32px; line-height: 1.05; text-align: right; }
 .q-sub { color: var(--muted); font-size: 13px; }
-.q-chg { display: flex; justify-content: flex-end; gap: 14px; font-size: 15px; }
-.q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); margin-right: 5px; }
-.q-chg .amt { margin-left: 5px; font-weight: 500; }
+.q-chg { display: grid; grid-template-columns: auto auto auto; justify-content: end; align-items: baseline; gap: 1px 10px; font-size: 16px; }
+.q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); }
+.q-chg .chg, .q-chg .amt { justify-self: end; }
+.q-chg .amt { font-weight: 500; min-width: 64px; text-align: right; }
 .q-line { grid-column: 1 / -1; width: 100%; height: 34px; margin-top: 8px; }
 .q-line path { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .q-err { grid-column: 1 / -1; color: var(--amber); font-size: 13px; }
@@ -423,7 +424,7 @@ function viewHome() {
         <span class="q-name">${esc(o.nick)}</span>
         <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
         <span class="q-sub">${o.players.length ? `선수 ${o.players.length}명, ${esc((o.match || '').slice(5, 10).replace('-', '.'))} 경기` : '최근 경기 기록 없음'}</span>
-        <span class="q-chg"><span><span class="lbl">1일</span>${p1}${a1}</span><span><span class="lbl">7일</span>${p7}</span></span>
+        <span class="q-chg"><span class="lbl">1일</span>${p1}${a1 || '<span></span>'}<span class="lbl">7일</span>${p7}${a7 || '<span></span>'}</span>
         ${o.error ? `<span class="q-err">${esc(o.error)}</span>` : ''}${line}</a>
       ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
         <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
