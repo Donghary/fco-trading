@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D6A43">
+<title>구단 시세</title>
+<style>
+:root {
+  --bg: #F2F4EF; --surface: #FFFFFF; --ink: #16211B; --muted: #66736B; --line: #D9DED6;
+  --grass: #1D6A43; --up: #D23A2E; --down: #2257C5;  /* 상승 빨강, 하락 파랑 */
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131A16; --surface: #1B2420; --ink: #E8EDE8; --muted: #93A098; --line: #2C3832;
+          --grass: #5FBF8A; --up: #FF6B5E; --down: #6C9BFF; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); -webkit-text-size-adjust: 100%;
+  font: 15px/1.45 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; word-break: keep-all; }
+main { max-width: 1400px; margin: 0 auto; padding: 0 16px calc(32px + env(safe-area-inset-bottom)); }
+header { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 0 8px; }
+h1 { font-size: 17px; margin: 0; }
+#updated, .sub, .note { color: var(--muted); font-size: 13px; }
+
+/* 구단주 4명 합계 : 스크롤해도 항상 위에 고정. 휴대폰 2x2, 넓은 화면 4칸 */
+#owners { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin: 0 -16px; position: sticky; top: 0; z-index: 1;
+  background: var(--line); border-block: 1px solid var(--line); }
+#owners a { background: var(--bg); padding: 8px 16px; color: inherit; text-decoration: none; min-width: 0; }
+#owners span { display: block; }
+#owners .nick { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#owners b { display: block; font-size: 16px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 24px; }
+.owner { min-width: 0; scroll-margin-top: 140px; }
+.owner h2 { font-size: 17px; margin-top: 28px; }
+.watch { max-width: 640px; }
+@media (min-width: 900px) { #owners { grid-template-columns: repeat(4, 1fr); } .owner { scroll-margin-top: 80px; } }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--grass); outline-offset: -2px; }
+
+.total { padding: 10px 0 6px; }
+.total strong { display: block; font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; }
+.total .chg { font-size: 14px; }
+svg.trend { display: block; width: 100%; height: 72px; margin: 10px 0 2px; }
+svg.trend polyline { fill: none; stroke: var(--grass); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+
+ul { list-style: none; margin: 14px 0 0; padding: 0; background: var(--surface); border-radius: 10px; }
+li { display: grid; grid-template-columns: 38px 1fr auto; gap: 8px; align-items: center; padding: 11px 12px; }
+li + li { border-top: 1px solid var(--line); }
+.pos { color: var(--muted); font-size: 12px; font-weight: 700; }
+.who { min-width: 0; }
+.who b { font-weight: 600; }
+.who img { height: 15px; vertical-align: -2px; margin-right: 4px; }
+.grade { color: var(--grass); font-weight: 700; font-size: 13px; margin-left: 4px; }
+.sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.price { text-align: right; white-space: nowrap; }
+.price b { display: block; font-weight: 700; }
+.chg { font-size: 12px; color: var(--muted); }
+.up { color: var(--up); } .down { color: var(--down); }
+.note { padding: 14px 2px; margin: 0; }
+.error { color: var(--up); }
+
+form { display: flex; gap: 8px; margin-top: 18px; }
+input, select, .btn { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 10px; min-height: 42px; }
+input { flex: 1; min-width: 0; font-size: 16px; }  /* 16px 미만이면 아이폰이 화면을 확대함 */
+.btn { cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+.btn.main { background: var(--grass); border-color: var(--grass); color: var(--bg); font-weight: 600; }
+li .act { display: flex; gap: 6px; align-items: center; }
+h2 { font-size: 14px; margin: 22px 2px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>구단 시세</h1><span id="updated"></span></header>
+  <nav id="owners" aria-label="구단주별 합계"></nav>
+  <section id="view"><p class="note">불러오는 중</p></section>
+  <p class="note">Data based on NEXON Open API</p>
+</main>
+<script>
+const STATIC = false;  // build 가 true 로 바꿈 : 서버 없이 data.json 만 읽는 보기 전용
+let S = null, found = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+
+// 한국식 단위 : 1조 2,345억 / 18억 5,000만 / 6만 4,100
+function bp(n) {
+  if (n == null) return '불러오는 중';
+  if (!n) return '시세 없음';
+  const parts = [[1e12, '조'], [1e8, '억'], [1e4, '만'], [1, '']]
+    .map(([u, name], i, a) => [Math.floor(n % (a[i - 1]?.[0] ?? Infinity) / u), name])
+    .filter(([v]) => v).map(([v, name]) => v.toLocaleString('ko-KR') + name);
+  return parts.slice(0, 2).join(' ');
+}
+function chg(now, base, label) {
+  if (!now || !base) return '';
+  const p = (now - base) / base * 100, cls = p > 0.05 ? 'up' : p < -0.05 ? 'down' : '';
+  return `${label} <span class="${cls}">${cls === 'up' ? '▲' : cls === 'down' ? '▼' : ''}${Math.abs(p).toFixed(1)}%</span>`;
+}
+const ago = (h, days) => h[h.length - days];  // hist 의 마지막 값이 어제
+
+function row(p, action = '') {
+  return `<li>
+    <span class="pos">${esc(p.pos)}</span>
+    <div class="who">
+      <div>${p.seasonImg ? `<img src="${esc(p.seasonImg)}" alt="">` : ''}<b>${esc(p.name)}</b><span class="grade">${p.grade}강</span></div>
+      <div class="sub">${esc(p.season)}</div>
+    </div>
+    ${action || `<div class="price"><b>${bp(p.now)}</b>
+      <span class="chg">${[chg(p.now, ago(p.hist, 1), '어제보다'), chg(p.now, ago(p.hist, 7), '7일')].filter(Boolean).join(', ')}</span></div>`}
+  </li>`;
+}
+
+// 선수별 30일 시세를 날짜별로 더한 구단 가치 추이 (오늘 포함)
+function totals(players) {
+  const priced = players.filter(p => p.now);
+  const days = Math.min(30, ...priced.map(p => p.hist.length));
+  if (!priced.length || !isFinite(days)) return [];
+  const sum = f => priced.reduce((a, p) => a + f(p), 0);
+  return [...Array(days).keys()].map(i => sum(p => ago(p.hist, days - i))).concat(sum(p => p.now));
+}
+function summary(players, label) {
+  const t = totals(players);
+  if (!t.length) return '';
+  const now = t[t.length - 1], lo = Math.min(...t), hi = Math.max(...t), span = hi - lo || 1;
+  const pts = t.map((v, i) => `${(i / (t.length - 1 || 1) * 300).toFixed(1)},${(66 - (v - lo) / span * 60).toFixed(1)}`).join(' ');
+  return `<div class="total"><span class="sub">${label}</span><strong>${bp(now)} BP</strong>
+      <span class="chg">${[chg(now, t[t.length - 2], '어제보다'), chg(now, t[t.length - 8], '7일 전보다')].filter(Boolean).join(', ')}</span></div>
+    <svg class="trend" viewBox="0 0 300 72" preserveAspectRatio="none" role="img" aria-label="최근 ${t.length - 1}일 가치 추이"><polyline points="${pts}"/></svg>
+    <div class="axis"><span>${t.length - 1}일 전 ${bp(t[0])}</span><span>최저 ${bp(lo)}, 최고 ${bp(hi)}</span></div>`;
+}
+
+function render() {
+  if (!S) return;
+  $('updated').textContent = S.updated ? new Date(S.updated * 1000).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}) + ' 갱신' : '첫 갱신 중';
+  $('owners').innerHTML = S.owners.map((o, i) => {
+    const t = totals(o.players), now = t[t.length - 1];
+    return `<a href="#o${i}"><span class="nick">${esc(o.nick)}</span><b>${t.length ? bp(now) : '명단 없음'}</b>
+      <span class="chg">${chg(now, t[t.length - 2], '어제보다') || '&nbsp;'}</span></a>`;
+  }).join('');
+  const q = $('q')?.value ?? '';
+  $('view').innerHTML = `<div class="cols">${S.owners.map((o, i) => `<section class="owner" id="o${i}"><h2>${esc(o.nick)}</h2>`
+      + (o.error ? `<p class="note error">${esc(o.error)}</p>` : '')
+      + summary(o.players, `최근 경기(${esc((o.match || '').slice(0, 10))}) 출전 ${o.players.length}명 합계`)
+      + (o.players.length ? `<ul>${o.players.map(p => row(p)).join('')}</ul>` : '') + '</section>').join('')}</div>`
+    + '<section class="owner watch" id="watch"><h2>관심선수</h2>'
+    + summary(S.watch, `관심선수 ${S.watch.length}명 합계`)
+    + (S.watch.length ? `<ul>${S.watch.map(p => row({...p, pos: ''}).replace('</li>', STATIC ? '</li>' : `<button class="btn" data-del="${p.spid},${p.grade}" aria-label="${esc(p.name)} 삭제">삭제</button></li>`)).join('')}</ul>`
+       : `<p class="note">아직 관심선수가 없음${STATIC ? '' : '. 아래에서 이름으로 찾아 추가'}</p>`)
+    + (STATIC ? '' : `<form id="find"><input id="q" type="search" placeholder="선수 이름" value="${esc(q)}" autocomplete="off" enterkeyhint="search"><button class="btn main">찾기</button></form>`
+    + (found.length ? `<h2>검색 결과 ${found.length}건</h2><ul>${found.map((p, i) => row({...p, pos: ''}, `<div class="act">
+        <select aria-label="강화 단계" id="g${i}">${[...Array(13).keys()].map(g => `<option>${g + 1}</option>`).join('')}</select>
+        <button class="btn" data-add="${i}">추가</button></div>`).replace(/<span class="grade">.*?<\/span>/, '')).join('')}</ul>` : ''))
+    + '</section>';
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body && {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) throw new Error((await r.json()).error);
+  return r.json();
+}
+async function load() {
+  // 검색어를 입력 중일 때는 화면을 다시 그리지 않음
+  try { S = await api(STATIC ? 'data.json?t=' + Date.now() : '/api/state'); if (document.activeElement?.id !== 'q') render(); }
+  catch { $('updated').textContent = STATIC ? '시세 파일을 불러오지 못함. 잠시 뒤 새로고침' : '연결 끊김. 맥에서 app.py 가 켜져 있는지 확인'; }
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.add) { const p = found[b.dataset.add]; S = await api('/api/watch', {spid: p.spid, grade: +$('g' + b.dataset.add).value}); found = []; render(); }
+  if (b.dataset.del) { const [spid, grade] = b.dataset.del.split(','); S = await api('/api/unwatch', {spid: +spid, grade: +grade}); render(); }
+});
+document.addEventListener('submit', async e => {
+  e.preventDefault();
+  found = await api('/api/search?q=' + encodeURIComponent($('q').value));
+  render();
+  if (!found.length) $('view').insertAdjacentHTML('beforeend', '<p class="note">그 이름의 선수를 찾지 못함. 게임에 표시되는 한글 이름으로 다시 검색</p>');
+});
+document.addEventListener('visibilitychange', () => document.hidden || load());
+setInterval(load, 60000);
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+name: 시세 갱신
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # 10분마다 (GitHub 사정으로 늦어지거나 건너뛸 수 있음)
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 app.py check  # 임시 : GitHub 서버에서 넥슨 데이터센터 접속이 되는지 확인
+      - run: python3 app.py build
+        env:
+          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
