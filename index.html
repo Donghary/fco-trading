@@ -138,8 +138,11 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 /* 선수 목록 */
 .sorts { display: flex; align-items: center; gap: 2px; margin-right: -8px; }
 .rows { border-top: 1px solid var(--line-strong); }
+.rows > li { border-bottom: 1px solid var(--line); }
+.rows > li.acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px; }
+.rows > li.acts > .btn { margin-top: 8px; }
 .p { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: "face id now" "face d1 d1" "face d7 d7";
-  gap: 3px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); transition: background .16s; }
+  gap: 3px 10px; padding: 12px 0; transition: background .16s; }
 a.p:hover { background: var(--panel); }
 .face { grid-area: face; width: 48px; height: 48px; object-fit: contain; object-position: bottom; background: var(--panel); border-radius: 8px; }
 .p-id { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -201,7 +204,7 @@ label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--mute
 .note { color: var(--muted); font-size: 14px; padding: 16px 0; max-width: 62ch; }
 .note b { color: var(--ink); }
 .msg { color: var(--amber); font-size: 14px; padding: 10px 0 0; }
-.res { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.res { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 0; }
 .res .p-id { grid-area: auto; }
 .res .p-id small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 details { margin-top: 26px; border-top: 1px solid var(--line-strong); }
@@ -404,7 +407,7 @@ function playerRow(p, extra = '') {
   return `<li><a class="p" href="#/p/${p.spid}/${p.grade}">${face(p)}
     <span class="p-id">${ident(p)}${p.ovr ? `<span class="ovr-n num"><span class="sr">오버롤 </span>${p.ovr}</span>` : ''}${p.pos ? `<span class="pos">${esc(p.pos)}</span>` : ''}</span>
     <span class="p-now num" data-roll="${key(p)}">${compact(p.now)}</span>
-    ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`;
+    ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`.replace('<li>', extra ? '<li class="acts">' : '<li>');
 }
 const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
 function playerList(players) {
@@ -541,7 +544,7 @@ function viewWatch() {
   const list = watchList(), token = LS.get('token', ''), found = search(ui.q);
   const need = ui.q && !NAMES;
   return `<div class="bar"><h1>관심선수 ${list.length}명</h1></div>
-    ${list.length ? `<ol class="rows">${list.map(p => playerRow(p)).join('')}</ol>` : '<p class="note"><b>아직 저장한 선수가 없음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>'}
+    ${list.length ? `<ol class="rows">${list.map(p => playerRow(p, `<button class="btn quiet" data-toggle="${key(p)}" aria-label="${esc(p.name)} 관심선수에서 빼기" ${ui.busy ? 'disabled' : ''}>빼기</button>`)).join('')}</ol>` : '<p class="note"><b>아직 저장한 선수가 없음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>'}
     <label class="lab" for="q">선수 찾기</label>
     <form class="find" data-find><input class="field" id="q" type="search" value="${esc(ui.q)}" placeholder="예 : 손흥민" autocomplete="off" enterkeyhint="search"><button class="btn go">찾기</button></form>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
