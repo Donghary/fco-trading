@@ -95,9 +95,9 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-line { grid-column: 1 / -1; width: 100%; height: 34px; margin-top: 8px; }
 .q-line path { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .q-err { grid-column: 1 / -1; color: var(--amber); font-size: 13px; }
-.editing .q-main { padding-right: 100px; pointer-events: none; }
+.editing .q-main { padding-right: 100px; pointer-events: none; min-height: 72px; align-content: center; }
 .editing .q-val, .editing .q-chg, .editing .q-line { display: none; }
-.q-move { position: absolute; right: 0; top: 12px; display: flex; gap: 6px; }
+.q-move { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
 .q-move .btn { width: 44px; padding: 0; }
 .q-more { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid var(--line); font-weight: 700; }
 .q-more span:last-child { color: var(--muted); font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 4px; }
@@ -128,10 +128,11 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .plot .cross { stroke: var(--line-strong); stroke-width: 1; }
 .plot .base { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 5; }
 .plot [hidden] { display: none; }
-.readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; height: 58px; align-content: center; margin-top: 8px; font-size: 14px; }
+.readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; height: 54px; align-content: center; margin-top: 8px; font-size: 14px; }
 .readout b { font-size: 24px; line-height: 1.15; }
 .readout .when { color: var(--muted); font: 600 15px var(--num); min-width: 78px; }
 .readout .vs { flex-basis: 100%; color: var(--muted); }
+.readout .vs.rest { font-size: 16px; }
 .plot-empty { display: grid; place-items: center; height: 210px; color: var(--muted); font-size: 14px; text-align: center; padding: 0 24px; }
 .plot-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 6px; }
 .plot-foot .mm { color: var(--flat); font-size: 15px; }
@@ -195,13 +196,16 @@ section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-b
 .watchbtn { margin-top: 22px; width: 100%; }
 
 /* 관심선수, 검색 */
-.find { display: flex; gap: 8px; margin-top: 6px; }
+.find { display: flex; gap: 8px; }
 .field { flex: 1; min-width: 0; min-height: 46px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel);
   font-size: 16px; caret-color: var(--amber); transition: border-color .16s; }
 .field::placeholder { color: var(--faint); }
 .field:focus { outline: none; border-color: var(--amber); }
 select.field { flex: none; width: 76px; padding: 0 8px; font-family: var(--num); font-weight: 600; font-size: 17px; }
-label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 22px; }
+label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 22px 0 6px; }
+label.lab.first { margin-top: 0; }
+.field.wide { width: 100%; font: 700 16px var(--sans); padding: 0 14px; }
+.rows.listed { margin-top: 14px; }
 .note { color: var(--muted); font-size: 14px; padding: 16px 0; max-width: 62ch; }
 .note b { color: var(--ink); }
 .msg { color: var(--ink); font-size: 14px; font-weight: 600; padding: 10px 0 0; }
@@ -293,7 +297,7 @@ function full(n) {  // 355억 3,600만
   if (!n) return '<span class="na">시세 없음</span>';
   let out = [], r = Math.abs(n);
   for (const [u, s] of UNITS) { const v = Math.floor(r / u); if (v) { out.push(v.toLocaleString('ko-KR') + `<i>${s}</i>`); r %= u; } }
-  if (r && out.length < 2) out.push(r.toLocaleString('ko-KR'));
+  if (r && Math.abs(n) < 1e7) out.push(r.toLocaleString('ko-KR'));
   return out.slice(0, 2).join(' ');
 }
 function compact(n) {  // 18.5억
@@ -326,14 +330,13 @@ const face = p => `<img class="face" src="${CDN}playersAction/p${p.spid}.png" da
 const ident = p => `${gradeBadge(p.grade)}${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="18">` : ''}<b>${esc(p.name)}</b>`;
 
 // ---------- 풀케미 오버롤 ----------
-// 받아온 능력치는 적응도 5(+4)까지 반영된 값. 사용자 기준 : 선발 중 8강 이상이 8명이면 8강 이상 선수 +8,
-// 선발 중 11강 이상이 8명이면 11강 이상 선수만 +9 (그 팀의 8~10강 선수는 그대로 +8)
-const BASE_CHEM = 4;
+// 받아온 능력치는 적응도 5 가 이미 반영된 값이고, 풀케미는 그 위에 따로 더함 (사용자 기준)
+// 선발 중 8강 이상이 8명이면 8강 이상 선수 +8, 선발 중 11강 이상이 8명이면 11강 이상 선수만 +9 (그 팀의 8~10강은 +8)
 function chem(players, grade) {
   const st = players.filter(p => p.pos !== 'SUB'), n = g => st.filter(p => p.grade >= g).length;
-  return grade >= 11 && n(11) >= 8 ? 9 : grade >= 8 && n(8) >= 8 ? 8 : BASE_CHEM;
+  return grade >= 11 && n(11) >= 8 ? 9 : grade >= 8 && n(8) >= 8 ? 8 : 0;
 }
-const chemLabel = c => c > BASE_CHEM ? `풀케미 +${c}` : '적응도 5';
+const chemLabel = c => c ? `적응도 5 + 풀케미 +${c}` : '적응도 5';
 
 // ---------- 구단 합계 ----------
 function team(players) {
@@ -400,7 +403,8 @@ function hoverChart(plot, i) {
   g.toggleAttribute('hidden', !show);
   g.querySelector('line').setAttribute('x1', x); g.querySelector('line').setAttribute('x2', x);
   g.querySelector('circle').setAttribute('cx', x); g.querySelector('circle').setAttribute('cy', Y(p.v));
-  out.innerHTML = `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b><span class="vs">${i ? `${esc(pts[0].lab)}보다 ${pc} ${amt}` : '이 기간의 시작 값'}</span>`;
+  const vs = i ? `${esc(pts[0].lab)}보다 ${pc} ${amt}` : '이 기간의 시작 값';
+  out.innerHTML = show ? `<span class="when">${esc(p.lab)}</span><b class="num">${full(p.v)}</b><span class="vs">${vs}</span>` : `<span class="vs rest">${vs}</span>`;
 }
 function nearest(plot, clientX) {
   const { X } = plot._geo, x = clientX - plot.getBoundingClientRect().left, pts = plot._pts;
@@ -435,7 +439,7 @@ function playerList(players, team, ctx) {
   const f = SORTS[ui.sort][1];
   return `<div class="bar"><h2>선수 ${players.length}명</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
       `<button class="btn quiet" data-sort="${k}" aria-pressed="${k === ui.sort}">${label}순</button>`).join('')}</div></div>
-    <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p, '', team ? chem(team, p.grade) - BASE_CHEM : 0, ctx)).join('')}</ol>`;
+    <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p, '', team ? chem(team, p.grade) : 0, ctx)).join('')}</ol>`;
 }
 
 function viewHome() {
@@ -455,7 +459,7 @@ function viewHome() {
       ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
         <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
   }).join('');
-  const w = watchList();
+  const w = Object.values(watchAll()).flat();
   return `<div class="bar"><h1>구단 가치 (BP), 현재 명단 기준 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
     <ol class="board ${ui.edit ? 'editing' : ''}">${rows}</ol>
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
@@ -471,7 +475,9 @@ function viewOwner(i) {
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
     ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}</div>` + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
     ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
-    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 풀케미 기준임 : ${chem(o.players, 8) > BASE_CHEM ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 적응도 5만 반영'}</p>`;
+    <div class="bar"><h2>${esc(o.nick)}의 관심선수 ${watchOf(o.nick).length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
+    ${watchOf(o.nick).length ? `<ol class="rows">${watchOf(o.nick).map(p => playerRow(p)).join('')}</ol>` : ''}
+    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
 }
 
 function playerRanges(d) {
@@ -493,13 +499,13 @@ function playerRanges(d) {
   ];
 }
 function viewPlayer(spid, grade, ctx) {
-  const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null, bonus = owner ? chem(owner.players, grade) : BASE_CHEM, add = bonus - BASE_CHEM;
+  const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null, bonus = owner ? chem(owner.players, grade) : 0, add = bonus;
   if (!c || c.at !== S.updated) {
     fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
       .catch(() => { detail[k] = { at: S.updated, error: true }; render(); });
     if (!c?.data) return `<div class="head"><button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button><h1>불러오는 중</h1></div><div class="skel"></div><div class="skel"></div>`;
   }
-  const d = detail[k].data, saved = watchList().some(w => key(w) === k);
+  const d = detail[k].data, mine = who(), saved = watchOf(mine).some(w => key(w) === k);
   const back = `<button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button>`;
   if (!d) return `<div class="head">${back}<h1>추적하지 않는 선수</h1></div>
     <p class="note">이 선수는 아직 시세를 받아오지 않음. 구단 명단에 있거나 관심선수로 저장된 선수만 추적함. 방금 저장했다면 1~2분 뒤에 다시 열면 됨</p>
@@ -519,38 +525,73 @@ function viewPlayer(spid, grade, ctx) {
     ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, ${owner ? esc(owner.nick) + ' 구단 ' : ''}${chemLabel(bonus)} 기준)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
       <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(st).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
     ${facts.length ? `<section><h2>선수 정보</h2><dl class="facts">${facts.map(([a, b]) => `<div><dt>${a}</dt><dd>${esc(b)}</dd></div>`).join('')}</dl></section>` : ''}
-    <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? '관심선수에서 빼기' : '관심선수로 저장'}</button>
+    <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? `${esc(mine)} 관심선수에서 빼기` : `${esc(mine)} 관심선수로 저장`}</button>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}`;
 }
 
-// ---------- 관심선수 : 저장소의 watchlist.json 을 고침 (편집용 토큰 필요) ----------
-function watchList() {  // 방금 저장한 내용은 다음 갱신 전까지 이 기기에서 먼저 보여 줌
+// ---------- 관심선수 : 구단주별 목록. 저장소의 watchlist.json 을 고침 (편집 권한 필요) ----------
+const who = () => { const w = LS.get('who', ''); return S.owners.some(o => o.nick === w) ? w : S.owners[0].nick; };
+function watchAll() {  // {구단주명: [선수]}. 방금 저장한 내용은 다음 갱신 전까지 이 기기에서 먼저 보여 줌
   const o = LS.get('watchOverride', null), now = Date.now() / 1000;
-  if (!o || now - o.at > 900) return S.watch;
-  const have = Object.fromEntries(S.watch.map(w => [key(w), w]));
-  if (o.list.length === S.watch.length && o.list.every(w => have[key(w)])) { LS.set('watchOverride', null); return S.watch; }
-  return o.list.map(w => have[key(w)] || { ...w, pos: '', now: null, hist: [], pending: true });
+  if (!o || !o.lists || now - o.at > 900) return S.watch;
+  const have = Object.fromEntries(Object.values(S.watch).flat().map(w => [key(w), w]));
+  const same = S.owners.every(({ nick }) => { const a = o.lists[nick] || [], b = S.watch[nick] || []; return a.length === b.length && a.every((w, i) => key(w) === key(b[i])); });
+  if (same) { LS.set('watchOverride', null); return S.watch; }
+  return Object.fromEntries(S.owners.map(({ nick }) => [nick, (o.lists[nick] || []).map(w => have[key(w)] || { ...w, pos: '', now: null, hist: [], pending: true })]));
 }
-async function saveWatch(change, entry) {
-  const token = LS.get('token', '');
-  if (!token) { ui.msg = '저장하려면 편집용 토큰이 필요함. 관심선수 화면 아래의 "편집용 토큰"에서 한 번 넣어 두면 됨'; ui.needToken = true; return render(); }
+const watchOf = nick => watchAll()[nick] || [];
+async function repoWrite(path, change, message) {
+  const url = `https://api.github.com/repos/${S.repo}/contents/${path}`, headers = { Authorization: 'Bearer ' + LS.get('token', ''), Accept: 'application/vnd.github+json' };
+  const cur = await fetch(url, { headers, cache: 'no-store' });
+  if (cur.status === 401) throw new Error('편집 권한이 만료되었거나 맞지 않음. 비밀번호나 토큰을 다시 넣어야 함');
+  if (!cur.ok && cur.status !== 404) throw new Error('이 권한으로는 저장소에 접근할 수 없음');
+  const file = cur.ok ? await cur.json() : null;
+  const next = change(file ? JSON.parse(new TextDecoder().decode(unb64(file.content.replace(/\s/g, '')))) : null);  // 한글 구단주명이 들어가므로 UTF-8 로 다룸
+  const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message, content: b64(new TextEncoder().encode(JSON.stringify(next))), ...(file && { sha: file.sha }) }) });
+  if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 토큰에 Contents 쓰기 권한이 있는지 확인해야 함');
+  return next;
+}
+async function saveWatch(nick, change, entry) {
+  if (!LS.get('token', '')) { ui.msg = '저장하려면 편집 권한이 필요함. 관심선수 화면 아래 "편집 권한"에서 한 번만 풀어 두면 됨'; ui.needToken = true; return render(); }
   ui.busy = true; ui.msg = ''; render();
   try {
-    const url = `https://api.github.com/repos/${S.repo}/contents/watchlist.json`, headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
-    const cur = await fetch(url, { headers, cache: 'no-store' });
-    if (cur.status === 401) throw new Error('토큰이 만료되었거나 맞지 않음. 편집용 토큰을 다시 넣어야 함');
-    if (!cur.ok) throw new Error('이 토큰으로는 저장소에 접근할 수 없음. 토큰을 만들 때 저장소와 Contents 권한을 확인해야 함');
-    const file = await cur.json(), list = change(JSON.parse(atob(file.content.replace(/\s/g, ''))));
-    const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message: '관심선수 변경', content: btoa(JSON.stringify(list)), sha: file.sha }) });
-    if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 토큰에 Contents 쓰기 권한이 있는지 확인해야 함');
-    const known = Object.fromEntries([...watchList(), ...(entry ? [entry] : [])].map(w => [key(w), w]));
-    LS.set('watchOverride', { at: Date.now() / 1000, list: list.map(w => { const c = known[key(w)] || w; return { spid: w.spid, grade: w.grade, name: c.name || String(w.spid), season: c.season || '', seasonImg: c.seasonImg || '' }; }) });
-    ui.msg = entry ? '저장함. 시세는 1~2분 뒤에 표시됨' : '관심선수에서 뺌';
+    const lists = await repoWrite('watchlist.json', cur => { const all = cur && !Array.isArray(cur) ? cur : {}; return { ...all, [nick]: change(all[nick] || []) }; }, '관심선수 변경');
+    const known = Object.fromEntries([...Object.values(watchAll()).flat(), ...(entry ? [entry] : [])].map(w => [key(w), w]));
+    LS.set('watchOverride', { at: Date.now() / 1000, lists: Object.fromEntries(Object.entries(lists).map(([n, l]) => [n, l.map(w => { const c = known[key(w)] || w;
+      return { spid: w.spid, grade: w.grade, name: c.name || String(w.spid), season: c.season || '', seasonImg: c.seasonImg || '', positions: c.positions || [] }; })])) });
+    ui.msg = entry ? `${nick} 목록에 저장함. 시세는 1~2분 뒤에 표시됨` : `${nick} 목록에서 뺌`;
   } catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
   ui.busy = false; render();
 }
 const without = k => list => list.filter(w => key(w) !== k);
 const withEntry = e => list => [...without(key(e))(list), { spid: e.spid, grade: e.grade }];
+
+// 편집 권한 : 저장소 주인이 토큰을 비밀번호로 잠가 lock.json 에 올려 두면, 친구들은 비밀번호만으로 토큰을 풀어 씀
+const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a))), unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+async function passKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function lockToken(pass, token) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  return { salt: b64(salt), iv: b64(iv), data: b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await passKey(pass, salt), new TextEncoder().encode(token))) };
+}
+async function unlockToken(pass, lock) {
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(lock.iv) }, await passKey(pass, unb64(lock.salt)), unb64(lock.data)));
+}
+async function unlock(pass) {
+  ui.busy = true; render();
+  try { LS.set('token', await unlockToken(pass, await (await fetch('lock.json?t=' + Date.now())).json())); ui.msg = '이 기기에서 저장할 수 있게 됨'; ui.needToken = false; }
+  catch { ui.msg = '비밀번호가 맞지 않음'; ui.needToken = true; }
+  ui.busy = false; render();
+}
+async function setLock(pass) {
+  if (pass.length < 8) { ui.msg = '비밀번호는 8자 이상이어야 함'; ui.needToken = true; return render(); }
+  ui.busy = true; render();
+  try { const lock = await lockToken(pass, LS.get('token', '')); await repoWrite('lock.json', () => lock, '편집 비밀번호 변경'); ui.msg = '비밀번호를 정함. 1~2분 뒤부터 친구들이 이 비밀번호로 저장할 수 있음'; }
+  catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
+  ui.busy = false; ui.needToken = true; render();
+}
 
 function search(q) {
   q = q.replace(/\s/g, '').toLowerCase();
@@ -564,11 +605,13 @@ function search(q) {
   return out.sort((a, b) => b.exact - a.exact || b.spid - a.spid).slice(0, 80);
 }
 function viewWatch() {
-  const list = watchList(), token = LS.get('token', ''), found = search(ui.q);
-  const need = ui.q && !NAMES;
-  return `<div class="bar"><h1>관심선수 ${list.length}명</h1></div>
-    ${list.length ? `<ol class="rows">${list.map(p => playerRow(p, `<button class="btn quiet" data-toggle="${key(p)}" aria-label="${esc(p.name)} 관심선수에서 빼기" ${ui.busy ? 'disabled' : ''}>빼기</button>`)).join('')}</ol>` : '<p class="note"><b>아직 저장한 선수가 없음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>'}
-    <label class="lab" for="q">선수 찾기</label>
+  const nick = who(), list = watchOf(nick), token = LS.get('token', ''), found = search(ui.q), need = ui.q && !NAMES;
+  return `<div class="bar"><h1>관심선수</h1></div>
+    <label class="lab first" for="who">누구의 목록</label>
+    <select class="field wide" id="who">${S.owners.map(o => `<option value="${esc(o.nick)}" ${o.nick === nick ? 'selected' : ''}>${esc(o.nick)} (${watchOf(o.nick).length}명)</option>`).join('')}</select>
+    ${list.length ? `<ol class="rows listed">${list.map(p => playerRow(p, `<button class="btn quiet" data-toggle="${key(p)}" data-who="${esc(nick)}" aria-label="${esc(p.name)} 관심선수에서 빼기" ${ui.busy ? 'disabled' : ''}>빼기</button>`)).join('')}</ol>`
+      : `<p class="note"><b>${esc(nick)} 목록이 비어 있음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>`}
+    <label class="lab" for="q">선수 찾아 ${esc(nick)} 목록에 저장</label>
     <form class="find" data-find><input class="field" id="q" type="search" value="${esc(ui.q)}" placeholder="예 : 손흥민" autocomplete="off" enterkeyhint="search"><button class="btn go">찾기</button></form>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
     ${need ? '<p class="note">선수 목록을 불러오는 중</p>' : ui.q && !found.length ? '<p class="note">그 이름의 선수를 찾지 못함. 게임에 표시되는 한글 이름으로 다시 찾아보면 됨</p>' : ''}
@@ -576,10 +619,16 @@ function viewWatch() {
         <span class="p-id">${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="" height="18" loading="lazy">` : ''}<b>${esc(p.name)}</b><small>${esc(p.season)}</small></span>
         <select class="field" id="g${i}" aria-label="${esc(p.name)} 강화 단계">${[...Array(13).keys()].map(g => `<option value="${g + 1}">${g + 1}강</option>`).join('')}</select>
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
-    <details ${ui.needToken ? 'open' : ''}><summary>편집용 토큰<span>${token ? '이 기기에 저장됨' : '저장하려면 필요함'}</span></summary>
-      <p class="note">이 페이지는 누구나 볼 수 있지만, 관심선수를 바꾸는 것은 토큰을 가진 사람만 할 수 있음. 토큰은 이 기기에만 보관됨</p>
-      <ol><li>GitHub 로그인 후 Settings, Developer settings, Fine-grained tokens 로 이동</li><li>Repository access 에서 ${esc(S.repo.split('/')[1])} 저장소만 선택</li><li>Permissions 의 Contents 를 Read and write 로 설정하고 토큰 생성</li><li>만들어진 토큰을 아래에 붙여넣기</li></ol>
-      <form class="find" data-token><input class="field" id="tok" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="편집용 토큰" value="${esc(token)}"><button class="btn">${token ? '바꾸기' : '넣기'}</button></form>
+    <details ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
+      ${token ? `<p class="note">이 기기에서 관심선수를 저장하고 뺄 수 있음. 친구들이 토큰 없이 쓰게 하려면 비밀번호를 정해서 알려주면 됨</p>
+        <form class="find" data-setlock><input class="field" id="newpass" type="password" placeholder="친구들과 쓸 비밀번호 (8자 이상)" autocomplete="new-password" aria-label="새 비밀번호"><button class="btn" ${ui.busy ? 'disabled' : ''}>${S.lock ? '비밀번호 바꾸기' : '비밀번호 정하기'}</button></form>
+        <p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>`
+      : `${S.lock ? `<p class="note">친구들과 정한 비밀번호를 넣으면 이 기기에서 저장할 수 있음. 한 번만 넣으면 됨</p>
+          <form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`
+        : '<p class="note">아직 비밀번호가 정해지지 않음. 저장소 주인이 아래에 토큰을 한 번 넣고 비밀번호를 정하면, 친구들은 비밀번호만으로 저장할 수 있음</p>'}
+        <p class="note">저장소 주인용 : GitHub 토큰 넣기</p>
+        <ol><li>GitHub 로그인 후 Settings, Developer settings, Fine-grained tokens 로 이동</li><li>Repository access 에서 ${esc(S.repo.split('/')[1])} 저장소만 선택</li><li>Permissions 의 Contents 를 Read and write 로 설정하고 토큰 생성</li><li>만들어진 토큰을 아래에 붙여넣기</li></ol>
+        <form class="find" data-token><input class="field" id="tok" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="GitHub 토큰"><button class="btn">넣기</button></form>`}
     </details>`;
 }
 const notFound = what => `<div class="bar"><h1>${what}</h1></div><a class="btn" href="#/">구단 목록으로</a>`;
@@ -630,7 +679,9 @@ async function loadNames() {
 }
 
 // ---------- 동작 ----------
+document.addEventListener('change', e => { if (e.target.id === 'who') { LS.set('who', e.target.value); ui.msg = ''; render(); } });
 document.addEventListener('click', e => {
+  const link = e.target.closest('[data-setwho]'); if (link) LS.set('who', link.dataset.setwho);
   const b = e.target.closest('button, [role=tab]'); if (!b) return;
   const d = b.dataset;
   if ('edit' in d) { ui.edit = !ui.edit; render(); }
@@ -641,14 +692,17 @@ document.addEventListener('click', e => {
     b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b)); drawChart(id, charts[id]); }
   else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
   else if ('reload' in d) load();
-  else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(withEntry({ ...p, grade }), { ...p, grade }); }
+  else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), withEntry({ ...p, grade }), { ...p, grade }); }
+  else if ('forget' in d) { LS.set('token', ''); ui.msg = '이 기기의 편집 권한을 지움'; render(); }
   else if (d.toggle) { const [spid, grade] = d.toggle.split('_').map(Number), entry = { spid, grade, name: d.name, season: d.season, seasonImg: d.img };
-    watchList().some(w => key(w) === d.toggle) ? saveWatch(without(d.toggle)) : saveWatch(withEntry(entry), entry); }
+    const nick = d.who || who(); watchOf(nick).some(w => key(w) === d.toggle) ? saveWatch(nick, without(d.toggle)) : saveWatch(nick, withEntry(entry), entry); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
   if ('find' in e.target.dataset) { const q = $('#q').value.trim(); $('#q').blur(); location.hash = '#/watch' + (q ? '/' + encodeURIComponent(q) : ''); }
-  if ('token' in e.target.dataset) { LS.set('token', $('#tok').value.trim()); ui.msg = $('#tok').value.trim() ? '토큰을 이 기기에 넣어 둠' : '토큰을 지움'; render(); }
+  if ('token' in e.target.dataset) { LS.set('token', $('#tok').value.trim()); ui.msg = $('#tok').value.trim() ? '토큰을 이 기기에 넣어 둠. 이제 친구들과 쓸 비밀번호를 정하면 됨' : ''; ui.needToken = true; render(); }
+  if ('unlock' in e.target.dataset) unlock($('#pass').value);
+  if ('setlock' in e.target.dataset) setLock($('#newpass').value);
 });
 // 차트 : 마우스를 올리거나 손가락으로 훑으면 그 시점의 값, 방향키로도 이동
 for (const type of ['pointermove', 'pointerdown']) document.addEventListener(type, e => { const plot = e.target.closest?.('.plot'); if (plot?._pts) hoverChart(plot, nearest(plot, e.clientX)); });

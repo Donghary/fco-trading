@@ -2,7 +2,7 @@ name: 시세 갱신
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # 10분마다 (GitHub 사정으로 늦어지거나 건너뛸 수 있음)
+    - cron: "3-59/10 * * * *"  # 매시 3, 13, 23분... (정각은 GitHub 가 붐벼 자주 밀림. 시세는 정각 무렵 바뀜)
   workflow_dispatch:
   push:
     branches: [main]

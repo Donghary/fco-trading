@@ -206,9 +206,10 @@ def build():
                 s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
                 print("명단 조회 실패", n, e, file=sys.stderr)
 
-    watch = json.loads((ROOT / "watchlist.json").read_text())
+    raw = json.loads((ROOT / "watchlist.json").read_text())  # {구단주명: [{spid, grade}]}
+    watch = {n: raw.get(n, []) if isinstance(raw, dict) else [] for n in OWNERS}
     keys = {(p["spid"], p["grade"]) for s in squads.values() for p in s["players"]}
-    keys |= {(w["spid"], w["grade"]) for w in watch}
+    keys |= {(w["spid"], w["grade"]) for ws in watch.values() for w in ws}
     prices = {}
     for k in sorted(keys):
         key = f"{k[0]}_{k[1]}"
@@ -236,7 +237,8 @@ def build():
         "owners": [{"nick": n, "error": s.get("error"), "match": s["match"],
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
-        "watch": [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in watch],
+        "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
+        "lock": (ROOT / "lock.json").exists(),  # 친구용 편집 비밀번호가 정해졌는지
     })
     for k, price in prices.items():  # 선수 상세 : 눌렀을 때만 받아감
         key = f"{k[0]}_{k[1]}"
@@ -248,8 +250,9 @@ def build():
         players.setdefault(spid % 1000000, [name, []])[1].append(spid // 1000000)
     write("names.json", {"players": players, "seasons": {
         i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}})
-    for name in ("index.html", "favicon.png", "icon-180.png"):
-        (SITE / name).write_bytes((ROOT / name).read_bytes())
+    for name in ("index.html", "favicon.png", "icon-180.png", "lock.json"):
+        if (ROOT / name).exists():
+            (SITE / name).write_bytes((ROOT / name).read_bytes())
     print(time.strftime("%H:%M"), "생성 완료 : 시세", len(prices), "건")
 
 
