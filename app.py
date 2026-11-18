@@ -32,6 +32,8 @@ REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 
 SQUAD_MIN = 60  # 명단 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
+MATCH_PER_RUN = 50  # 한 번에 받을 경기 상세 수 (일일 한도를 나눠 씀)
+VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
 DATACENTER = "https://fconline.nexon.com/datacenter/"
@@ -61,6 +63,7 @@ def meta(name):
 NAMES = {p["id"]: p["name"] for p in meta("spid")}
 SEASONS = {s["seasonId"]: s for s in meta("seasonid")}
 POSITIONS = {p["spposition"]: p["desc"] for p in meta("spposition")}
+DIVISIONS = {d["divisionId"]: d["divisionName"] for d in meta("division")}
 
 
 # ---------- 넥슨 오픈 API : 구단 명단 ----------
@@ -86,13 +89,63 @@ def refresh_squad(nick, s):
     """s 를 최신 명단으로 고침. ouid 와 최근 경기 번호를 기억해 넥슨 API 호출을 줄임"""
     s["ouid"] = s.get("ouid") or nexon("id", nickname=nick)["ouid"]
     # 50 공식경기, 52 감독모드 각각의 최근 1경기 중 더 최근 것
-    ids = [m for mt in (50, 52) for m in nexon("user/match", ouid=s["ouid"], matchtype=mt, offset=0, limit=1)]
+    official = nexon("user/match", ouid=s["ouid"], matchtype=50, offset=0, limit=10)
+    s["official"] = official
+    ids = official[:1] + nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)
     if not ids:
         raise RuntimeError("최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음")
     if ids != s.get("ids"):
         s["players"], s["match"] = pick_squad([nexon("match-detail", matchid=i) for i in ids], s["ouid"])
         s["ids"] = ids
     s["at"] = time.time()
+
+
+def minute(t):
+    """goalTime : 상위 비트가 구간(0 전반, 1 후반, 2 연장 전반, 3 연장 후반, 4 승부차기), 하위 24비트가 그 구간의 초"""
+    half, sec = t >> 24, t & 0xFFFFFF
+    return [0, 45, 90, 105, 120][min(half, 4)] + sec // 60 + 1
+
+
+def match_rec(d, by_ouid):
+    def side(x):
+        md, sh = x.get("matchDetail") or {}, x.get("shoot") or {}
+        goals = [{"t": g.get("type"), "sp": g.get("spId"), "g": g.get("spGrade"), "a": g.get("assistSpId") if g.get("assist") else 0,
+                  "m": minute(g.get("goalTime") or 0)} for g in x.get("shootDetail") or [] if g.get("result") == 3]
+        return {"nick": by_ouid.get(x["ouid"], x.get("nickname", "")), "own": x["ouid"] in by_ouid, "res": md.get("matchResult"),
+                "end": md.get("matchEndType"), "goal": sh.get("goalTotal"), "pk": sh.get("shootOutScore"), "poss": md.get("possession"),
+                "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"), "goals": goals}
+    return {"date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}
+
+
+def refresh_matches():
+    """네 명끼리 붙은 클래식 1on1(40) 과 각자의 최근 공식경기(50) 상세를 받아 쌓음"""
+    owners = {n: s["ouid"] for n, s in STATE["squads"].items() if s.get("ouid")}
+    if len(owners) < 2:
+        return
+    by_ouid, cache = {o: n for n, o in owners.items()}, STATE["matches"]
+    first = not STATE["seeded"]  # 처음 한 번은 넥슨이 주는 30일 치를 끝까지 넘겨 받음
+    seen = {}
+    for n, o in owners.items():
+        for off in range(0, 1000 if first else 1, 100):
+            got = nexon("user/match", ouid=o, matchtype=40, offset=off, limit=100 if first else 30)
+            for m in got:
+                seen.setdefault(m, set()).add(n)
+            if len(got) < 100:
+                break
+    h2h = [m for m, who in seen.items() if len(who) >= 2]  # 두 명 이상의 목록에 같이 있으면 네 명끼리 경기
+    official = [m for s in STATE["squads"].values() for m in s.get("official", [])]
+    todo = [m for m in dict.fromkeys(official + STATE["queue"] + h2h) if m not in cache]
+    for m in todo[:MATCH_PER_RUN]:
+        try:
+            cache[m] = match_rec(nexon("match-detail", matchid=m), by_ouid)
+        except Exception as e:
+            print("경기 상세 실패", m, e, file=sys.stderr)
+    keep = set(official)  # 공식경기는 최근 10경기만, 네 명끼리 경기는 계속 보관
+    STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or m in keep}
+    STATE["queue"], STATE["seeded"] = todo[MATCH_PER_RUN:], True  # 못 받은 경기는 다음 실행에서 이어 받음
+    PENDING[0] = len(STATE["queue"])
+    if PENDING[0]:
+        print("경기 상세", PENDING[0], "건은 다음 갱신 때 받음")
 
 
 # ---------- 데이터센터 : 시세, 스탯 ----------
@@ -142,7 +195,8 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False}
+PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
 def load_state():
@@ -165,8 +219,11 @@ def load_state():
 
 
 def add_intra(key, t, price):
-    """시간대별 시세 추가. 같은 값이 이어지면 구간의 처음과 끝만 남겨 용량을 줄임"""
-    s = STATE["intra"].setdefault(key, [])
+    add_point(STATE["intra"].setdefault(key, []), t, price)
+
+
+def add_point(s, t, price):
+    """시간대별 값 추가. 같은 값이 이어지면 구간의 처음과 끝만 남겨 용량을 줄임"""
     if len(s) >= 2 and s[-1][1] == s[-2][1] == price:
         s[-1][0] = t
     else:
@@ -199,6 +256,22 @@ def read_watch():
             if isinstance(lists.get(n, []), list) else [] for n in OWNERS}
 
 
+def official_of(nick, s):
+    """구단주의 최근 공식경기 요약 : 경기별 결과와 가장 최근 경기의 등급"""
+    rows = []
+    for m in s.get("official", []):
+        r = STATE["matches"].get(m)
+        if not r or len(r["p"]) != 2:
+            continue
+        me = next((p for p in r["p"] if p["nick"] == nick), None)
+        if not me:
+            continue
+        op = r["p"][1] if r["p"][0] is me else r["p"][0]
+        rows.append({"d": r["date"], "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
+                     "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")})
+    return {"official": rows, "div": rows[0]["div"] if rows else ""}
+
+
 def write(name, obj):
     f = SITE / name
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -207,6 +280,10 @@ def write(name, obj):
 
 def build():
     load_state()
+    seed = ROOT / "seed_matches.json"  # 로컬에서 미리 받아 둔 경기 상세. 넥슨 일일 한도를 아끼려고 처음 한 번만 씀
+    if seed.exists() and not STATE["seeded"]:
+        STATE["matches"].update(json.loads(seed.read_text()))
+        STATE["seeded"] = True
     now = int(time.time())
 
     squads = STATE["squads"] = {n: STATE["squads"].get(n) or {"players": [], "match": None, "at": 0} for n in OWNERS}
@@ -220,6 +297,12 @@ def build():
             except Exception as e:
                 s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
                 print("명단 조회 실패", n, e, file=sys.stderr)
+
+    if api_key():
+        try:
+            refresh_matches()
+        except Exception as e:
+            print("경기 기록 갱신 실패", e, file=sys.stderr)
 
     watch = read_watch()
     keys = {(p["spid"], p["grade"]) for s in squads.values() for p in s["players"]}
@@ -241,6 +324,13 @@ def build():
     if keys and not prices:
         raise RuntimeError("조회할 선수가 있는데 시세를 하나도 받지 못함. 이전 결과를 유지함")
 
+    for n, s in squads.items():  # 실제 구단 가치 : 명단의 모든 선수 시세를 받았을 때만 기록
+        ks = [(p["spid"], p["grade"]) for p in s["players"]]
+        if ks and all(k in prices for k in ks):
+            add_point(STATE["value"].setdefault(n, []), now, sum(prices[k]["now"] for k in ks))
+    vcut = now - VALUE_DAYS * 86400
+    STATE["value"] = {n: [p for p in v if p[0] >= vcut] for n, v in STATE["value"].items() if n in OWNERS}
+
     cutoff = now - INTRA_DAYS * 86400
     STATE["intra"] = {k: [p for p in v if p[0] >= cutoff] for k, v in STATE["intra"].items()}
     STATE["intra"] = {k: v for k, v in STATE["intra"].items() if v}
@@ -248,12 +338,19 @@ def build():
     write("state.json", STATE)
     write("data.json", {
         "updated": now, "repo": REPO, "v": hashlib.md5((ROOT / "index.html").read_bytes()).hexdigest()[:8],
-        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"],
+        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s),
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
         "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
         "lock": (ROOT / "lock.json").exists(),  # 친구용 편집 비밀번호가 정해졌는지
     })
+    write("values.json", STATE["value"])
+    own = set(OWNERS)
+    named = lambda g: {**g, "n": NAMES.get(g["sp"], ""), "an": NAMES.get(g["a"], "") if g["a"] else ""}
+    write("h2h.json", {"pending": PENDING[0], "matches": sorted(({"id": m, "date": r["date"], "p": [{**p, "goals": [named(g) for g in p["goals"]]} for p in r["p"]]}
+                                          for m, r in STATE["matches"].items()
+                                          if r.get("type") == 40 and len(r["p"]) == 2 and all(p["nick"] in own for p in r["p"])),
+                                         key=lambda m: m["date"], reverse=True)})
     for k, price in prices.items():  # 선수 상세 : 눌렀을 때만 받아감
         key = f"{k[0]}_{k[1]}"
         write(f"p/{key}.json", {**card(*k, price=price), "daily": price["daily"], "days": price["days"],

@@ -60,7 +60,7 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 #stamp { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 #stamp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 #stamp.late { color: var(--amber); } #stamp.late::before { background: var(--amber); }
-.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr;
+.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr);
   height: calc(var(--dock) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--panel); border-top: 1px solid var(--line); }
 .dock a { display: grid; place-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -88,7 +88,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-main:hover { background: var(--panel); }
 .q-name { font-size: 17px; font-weight: 700; letter-spacing: -.02em; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-val { font-size: 32px; line-height: 1.05; text-align: right; }
-.q-sub { color: var(--muted); font-size: 13px; }
+.q-sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-chg { display: grid; grid-template-columns: auto auto auto; justify-content: end; align-items: baseline; gap: 1px 10px; font-size: 16px; }
 .q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); }
 .q-chg .chg, .q-chg .amt { justify-self: end; }
@@ -222,7 +222,79 @@ details ol li { counter-increment: s; padding: 3px 0 3px 22px; position: relativ
 details ol li::before { content: counter(s); position: absolute; left: 0; color: var(--faint); font: 600 14px var(--num); }
 .skel { height: 74px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--panel), var(--panel)) 0 16px / 42% 16px no-repeat, linear-gradient(var(--panel), var(--panel)) 100% 16px / 26% 26px no-repeat; }
 
+/* 경기 결과 칸 : 빨강, 파랑은 시세 등락 전용이라 승패는 명암으로만 구분 */
+.rc { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font: 700 12px/1 var(--sans); flex: none; }
+.rc.w { background: var(--ink); color: var(--board); }
+.rc.d { background: var(--raise); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.rc.l { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.form { display: inline-flex; gap: 3px; vertical-align: middle; }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--amber); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 6px; line-height: 16px; }
+
+/* 오늘의 등락 */
+.movers { margin-top: 26px; }
+.movers h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 0 8px; border-bottom: 1px solid var(--line-strong); }
+.mv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); transition: background .16s; }
+.mv:hover { background: var(--panel); }
+.mv small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-r { grid-column: 2; grid-row: 1 / span 2; display: grid; justify-items: end; gap: 1px; }
+.mv-r .num:first-child { font-size: 17px; }
+.mv-r .chg, .mv-r .amt { font-size: 14px; }
+.mv .p-id { grid-area: auto; grid-column: 1; }
+.mv small { grid-column: 1; }
+
+/* 최근 공식경기 */
+.of { display: grid; grid-template-columns: 22px 62px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.of .sc { font-size: 18px; }
+.of .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.of time, .mt time { color: var(--muted); font: 600 13px var(--num); white-space: nowrap; }
+.ofform { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+
+/* 상대전적 */
+.lg { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 64px; gap: 2px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.lg .rk { color: var(--faint); font: 600 15px var(--num); }
+.lg b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg small { grid-column: 2; color: var(--muted); font-size: 12px; }
+.lg .rec { grid-column: 3; grid-row: 1 / span 2; font-size: 17px; }
+.lg .pct { grid-column: 4; grid-row: 1 / span 2; font-size: 26px; text-align: right; }
+.lg .pct i, .duel .big i { font-size: .5em; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 10px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); transition: background .16s; }
+.pair:hover { background: var(--panel); }
+.pair .pa, .pair .pb { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pair .pb { text-align: right; }
+.pair .ps { font-size: 22px; text-align: center; }
+.pbar { grid-column: 1 / -1; display: flex; gap: 2px; height: 5px; }
+.pbar b { border-radius: 3px; background: var(--ink); }
+.pbar b:nth-child(2) { background: var(--line-strong); }
+.pbar b:nth-child(3) { background: var(--muted); opacity: .5; }
+.pm { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.duel .big { font-size: 38px; line-height: 1.1; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px; margin-top: 12px; }
+.kv div { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.kv dt { color: var(--muted); font-size: 12px; }
+.kv dd { font-size: 17px; }
+.gt { display: grid; grid-template-columns: minmax(0, 1fr) 100px 100px; gap: 0 8px; }
+.gt > * { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.gt .h { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gt .n { text-align: right; font-size: 17px; }
+.gt .n.z { color: var(--faint); }
+.scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.scorers h3 { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 0 2px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scorers li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.scorers li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.mt { margin: 0; border-top: 0; border-bottom: 1px solid var(--line); }
+details.mt summary { display: grid; grid-template-columns: 22px auto minmax(0, 1fr) auto; justify-content: stretch; gap: 10px; min-height: 48px; font-weight: 500; }
+details.mt summary .num { font-size: 18px; }
+details.mt summary::after { content: "골 보기"; color: var(--faint); font-size: 12px; }
+details.mt[open] summary::after { content: "접기"; }
+details.mt ol { padding: 0 0 10px 32px; }
+details.mt ol li { padding: 3px 0; color: var(--flat); font-size: 13px; }
+details.mt ol li::before { content: none; }
+details.mt ol .num { color: var(--muted); display: inline-block; min-width: 30px; }
+.gw { color: var(--muted); }
+
 @media (min-width: 760px) {
+  .mv-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .mv-pair > section { margin-top: 0; }
   main { padding-bottom: 48px; }
   .ranges button { flex: none; padding: 0 20px; }
   .top { padding: 0 max(24px, calc((100vw - 728px) / 2)); }
@@ -265,12 +337,14 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
   <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
   <symbol id="i-upw" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
   <symbol id="i-dnw" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-vs" viewBox="0 0 24 24"><path d="M4 6l6 6-6 6M20 6l-6 6 6 6"/></symbol>
   <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
 </svg>
 <header class="top">
   <a class="brand" href="#/"><img src="favicon.png?v=4" alt="" width="26" height="26">구단 시세판</a>
   <nav class="dock" aria-label="주 메뉴">
     <a href="#/" data-nav="home"><svg class="ico"><use href="#i-board"/></svg>구단</a>
+    <a href="#/h2h" data-nav="h2h"><svg class="ico"><use href="#i-vs"/></svg>상대전적</a>
     <a href="#/watch" data-nav="watch"><svg class="ico"><use href="#i-star"/></svg>관심선수</a>
   </nav>
   <span id="stamp" role="status"></span>
@@ -457,7 +531,7 @@ function viewHome() {
     return `<li class="q"><a class="q-main" href="#/o/${o.i}">
         <span class="q-name">${esc(o.nick)}</span>
         <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
-        <span class="q-sub">${o.players.length ? `선수 ${o.players.length}명, ${esc((o.match || '').slice(5, 10).replace('-', '.'))} 경기` : '최근 경기 기록 없음'}</span>
+        <span class="q-sub">${o.official?.length ? `${o.div ? esc(o.div) + ', ' : ''}공식 ${(([w, d, l]) => `${w}승 ${d}무 ${l}패`)(tally(o.official.map(m => m.r)))}` : o.players.length ? `선수 ${o.players.length}명` : '최근 경기 기록 없음'}</span>
         <span class="q-chg"><span class="lbl">1일</span>${p1}${a1 || '<span></span>'}<span class="lbl">7일</span>${p7}${a7 || '<span></span>'}</span>
         ${o.error ? `<span class="q-err">${esc(o.error)}</span>` : ''}${line}</a>
       ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
@@ -466,6 +540,7 @@ function viewHome() {
   const w = Object.values(watchAll()).flat();
   return `<div class="bar"><h1>구단 가치 (BP), 현재 명단 기준 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
     <ol class="board ${ui.edit ? 'editing' : ''}">${rows}</ol>
+    ${ui.edit ? '' : movers()}
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
 }
 
@@ -473,12 +548,23 @@ function viewOwner(i) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
   const t = team(o.players), pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
-  const ranges = [{ id: '7d', label: '7일', pts: pts.slice(-8) }, { id: '30d', label: '30일', pts, best: true }];
+  const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) }));
+  const since = real.length ? `실제 기록, ${clock(real[0].t)}부터 쌓는 중` : '실제 기록을 쌓기 시작함';
+  const day = (() => { const start = S.updated - 86400, before = real.filter(p => p.t < start).at(-1);
+    return [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...real.filter(p => p.t >= start)]; })();
+  const back = '현재 명단을 그때 시세로 계산한 값';
+  const ranges = [{ id: '24h', label: '24시간', pts: day, step: true, note: since }, { id: '7d', label: '7일', pts: pts.slice(-8), note: back },
+                  { id: '30d', label: '30일', pts, best: true, note: back }, { id: 'rec', label: '전체 기록', pts: real, step: true, note: since }];
+  const off = o.official || [], rec = tally(off.map(m => m.r));
   after = () => drawChart('team', ranges);
   return `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
-    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}</div>` + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
+    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
+      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 공식 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
+      + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
     ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
+    ${off.length ? `<div class="bar"><h2>최근 공식경기</h2></div><ol class="rows">${off.map(m => `<li class="of">${chip(m.r)}<span class="sc num">${m.g ?? '-'} : ${m.og ?? '-'}</span>
+      <span class="op">${esc(m.op)}${m.pk[0] || m.pk[1] ? `<span class="tag">승부차기 ${m.pk[0]} : ${m.pk[1]}</span>` : ''}${m.e === 1 ? '<span class="tag">몰수승</span>' : m.e === 2 ? '<span class="tag">몰수패</span>' : ''}</span><time>${mdate(m.d)}</time></li>`).join('')}</ol>` : ''}
     <div class="bar"><h2>${esc(o.nick)}의 관심선수 ${watchOf(o.nick).length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
     ${watchOf(o.nick).length ? `<ol class="rows">${watchOf(o.nick).map(p => playerRow(p)).join('')}</ol>` : ''}
     <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
@@ -635,6 +721,112 @@ function viewWatch() {
         <form class="find" data-token><input class="field" id="tok" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="GitHub 토큰"><button class="btn">넣기</button></form>`}
     </details>`;
 }
+// ---------- 따로 받는 파일 (상대전적, 실제 구단 가치) ----------
+const files = {};
+function file(name) {  // 갱신될 때마다 한 번 받아 두고, 받는 동안은 이전 값을 씀
+  const f = files[name];
+  if ((!f || f.at !== S.updated) && !f?.busy) {
+    files[name] = { ...f, busy: true };
+    fetch(`${name}?t=${S.updated}`).then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { files[name] = { at: S.updated, data }; render(); })
+      .catch(() => { files[name] = { at: S.updated, data: f?.data, err: true }; render(); });
+  }
+  return files[name]?.data;
+}
+const chip = r => `<span class="rc ${r === '승' ? 'w' : r === '패' ? 'l' : 'd'}" title="${esc(r)}">${esc(r || '-')}</span>`;
+const mdate = d => `${+d.slice(5, 7)}.${d.slice(8, 10)} ${d.slice(11, 16)}`;
+const tally = rs => rs.reduce((a, r) => (a[r === '승' ? 0 : r === '패' ? 2 : 1]++, a), [0, 0, 0]);
+const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
+// 슈팅 종류 : 3 헤더, 8 프리킥, 9 페널티킥은 경기 요약 숫자와 대조해 확인함. 나머지는 넥슨 번호표 기준, 이름이 없는 번호는 기타
+const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '칩슛', 5: '플레어', 6: '낮은 슛', 7: '발리', 8: '프리킥', 9: '페널티킥', 10: '무회전', 11: '바이시클' };
+const shotName = t => SHOT[t] || '기타 슛';
+
+function duel(ms, a, b) {  // a 기준 기록
+  const st = { n: 0, res: [], gf: 0, ga: 0, forf: 0, poss: 0, sh: [0, 0], sot: [0, 0], types: {}, sc: [{}, {}] };
+  for (const m of ms) {
+    const me = m.p.find(p => p.nick === a), op = m.p.find(p => p.nick === b);
+    if (!me || !op) continue;
+    st.n++; st.res.push(me.res); st.gf += me.goal || 0; st.ga += op.goal || 0; st.poss += me.poss || 0;
+    if (me.end || op.end) st.forf++;
+    [me, op].forEach((p, i) => { st.sh[i] += p.sh || 0; st.sot[i] += p.sot || 0;
+      p.goals.forEach(g => { (st.types[g.t] ??= [0, 0])[i]++; const n = g.n || '알 수 없음'; st.sc[i][n] = (st.sc[i][n] || 0) + 1; }); });
+  }
+  return st;
+}
+const form = res => `<span class="form" aria-label="최근 ${Math.min(5, res.length)}경기, 왼쪽이 이전">${res.slice(0, 5).reverse().map(chip).join('')}</span>`;
+const pct = ([w, d, l]) => w + d + l ? Math.round(w / (w + d + l) * 100) : 0;
+
+function viewH2H(a, b) {
+  const H = file('h2h.json'), back = files['h2h.json']?.err;
+  if (!H) return `<div class="bar"><h1>상대전적</h1></div>${back ? '<p class="note">전적을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'}`;
+  if (a != null && a !== '') return viewDuel(H, +a, +b);
+  const order = orderOf(), ms = H.matches;
+  const since = ms.length ? mdate(ms.at(-1).date).split(' ')[0] : '';
+  const table = order.map(o => {
+    const mine = ms.filter(m => m.p.some(p => p.nick === o.nick)), st = { res: [], gf: 0, ga: 0 };
+    mine.forEach(m => { const me = m.p.find(p => p.nick === o.nick), op = m.p.find(p => p !== me); st.res.push(me.res); st.gf += me.goal || 0; st.ga += op.goal || 0; });
+    return { o, st, t: tally(st.res) };
+  }).sort((x, y) => pct(y.t) - pct(x.t) || y.st.res.length - x.st.res.length);
+  const pairs = [];
+  order.forEach((x, i) => order.slice(i + 1).forEach(y => pairs.push([x, y])));
+  return `<div class="bar"><h1>네 명 순위 (클래식 1on1)</h1></div>
+    <ol class="rows">${table.map(({ o, st, t }, i) => `<li class="lg"><span class="rk">${i + 1}</span><b>${esc(o.nick)}</b>
+      <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></li>`).join('')}</ol>
+    <div class="bar"><h2>상대별 전적</h2></div>
+    <ol class="rows">${pairs.map(([x, y]) => {
+      const st = duel(ms.filter(m => m.p.some(p => p.nick === x.nick) && m.p.some(p => p.nick === y.nick)), x.nick, y.nick), t = tally(st.res), n = st.n || 1;
+      return `<li><a class="pair" href="#/h2h/${x.i}/${y.i}"><span class="pa">${esc(x.nick)}</span><span class="ps num">${t[0]} : ${t[2]}</span><span class="pb">${esc(y.nick)}</span>
+        <span class="pbar" aria-hidden="true"><b style="flex:${t[0]}"></b><b style="flex:${t[1]}"></b><b style="flex:${t[2]}"></b></span>
+        <span class="pm"><span>${st.n}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
+    }).join('')}</ol>
+    <p class="note">넥슨이 주는 경기 기록은 최근 30일뿐이라 ${since}부터 쌓기 시작함. 새 경기는 1시간마다 더해지고, 게임 안 통산 전적과는 다를 수 있음.${H.pending ? ` 아직 받는 중인 경기 ${H.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+}
+
+function viewDuel(H, i, j) {
+  const A = S.owners[i]?.nick, B = S.owners[j]?.nick;
+  if (!A || !B || i === j) return notFound('없는 대전');
+  const ms = H.matches.filter(m => m.p.some(p => p.nick === A) && m.p.some(p => p.nick === B)), st = duel(ms, A, B), t = tally(st.res);
+  const merged = {};
+  Object.entries(st.types).forEach(([k, [x, y]]) => { const n = shotName(+k), m = merged[n] ??= [0, 0]; m[0] += x; m[1] += y; });
+  const types = Object.entries(merged).sort((x, y) => y[1][0] + y[1][1] - x[1][0] - x[1][1]);
+  const top = side => Object.entries(st.sc[side]).sort((x, y) => y[1] - x[1]).slice(0, 5);
+  const show = ui.more ? ms : ms.slice(0, 15);
+  return `<div class="head"><a class="btn" href="#/h2h" aria-label="상대전적으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(A)} vs ${esc(B)}</b></h1></div>
+    ${st.n ? `<div class="quote duel"><div class="big num">${wdl(t)}</div>
+      <div class="ofform"><span>${esc(A)} 기준, ${st.n}경기, 승률 ${pct(t)}%</span>${form(st.res)}<a class="btn quiet" href="#/h2h/${j}/${i}">기준 바꾸기</a></div></div>
+    <dl class="kv"><div><dt>득실</dt><dd class="num">${st.gf} : ${st.ga}</dd></div><div><dt>경기당 득점</dt><dd class="num">${(st.gf / st.n).toFixed(1)} : ${(st.ga / st.n).toFixed(1)}</dd></div>
+      <div><dt>평균 점유율</dt><dd class="num">${Math.round(st.poss / st.n)}%</dd></div><div><dt>슈팅</dt><dd class="num">${st.sh[0]} : ${st.sh[1]}</dd></div>
+      <div><dt>유효슈팅</dt><dd class="num">${st.sot[0]} : ${st.sot[1]}</dd></div><div><dt>몰수 경기</dt><dd class="num">${st.forf}</dd></div></dl>
+    ${types.length ? `<section><h2>골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">${esc(A)}</span><span class="h n">${esc(B)}</span>
+      ${types.map(([k, [x, y]]) => `<span>${k}</span><span class="n num ${x ? '' : 'z'}">${x}</span><span class="n num ${y ? '' : 'z'}">${y}</span>`).join('')}</div></section>` : ''}
+    <section><h2>최다 득점 선수</h2><div class="scorers">${[0, 1].map(side => `<div><h3>${esc(side ? B : A)}</h3><ol>${top(side).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('') || '<li><span>골 없음</span></li>'}</ol></div>`).join('')}</div></section>
+    <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
+      const me = m.p.find(p => p.nick === A), op = m.p.find(p => p.nick === B);
+      const goals = [...me.goals.map(g => ({ ...g, who: A })), ...op.goals.map(g => ({ ...g, who: B }))].sort((x, y) => x.m - y.m);
+      const pk = me.pk || op.pk ? `<span class="tag">승부차기 ${me.pk} : ${op.pk}</span>` : '', forf = me.end === 1 ? '<span class="tag">몰수승</span>' : me.end === 2 ? '<span class="tag">몰수패</span>' : '';
+      return `<details class="mt"><summary>${chip(me.res)}<span class="num">${me.goal ?? '-'} : ${op.goal ?? '-'}</span><time>${mdate(m.date)}${pk}${forf}</time></summary>
+        <ol>${goals.map(g => `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')} <span class="gw">(${esc(g.who)})</span>, ${shotName(g.t)}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`).join('') || '<li>골 없음</li>'}</ol></details>`;
+    }).join('')}</section>
+    ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
+    <p class="note">골 종류에서 헤더, 프리킥, 페널티킥은 확인한 분류이고, 나머지는 넥슨이 공개한 번호표를 따름. 이름이 없는 번호는 기타 슛으로 묶음.</p>`
+    : '<p class="note">이 두 사람이 붙은 기록이 아직 없음</p>'}`;
+}
+
+// ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
+function movers() {
+  const seen = {};
+  orderOf().forEach(o => o.players.forEach(p => { if (p.now >= 1e7 && p.hist.length) (seen[key(p)] ??= { p, who: [] }).who.push(o); }));
+  const list = Object.values(seen).map(x => ({ ...x, r: x.p.now / ago(x.p, 1) - 1 })).filter(x => Math.abs(x.r) >= .0005);
+  const row = ({ p, who }) => { const [pc, amt] = move(p.now, ago(p, 1));
+    return `<li><a class="mv" href="#/p/${p.spid}/${p.grade}/o${who[0].i}"><span class="p-id">${ident(p)}</span><small>${who.map(o => esc(o.nick)).join(', ')}</small>
+      <span class="mv-r"><span class="num">${compact(p.now)}</span><span>${pc} ${amt}</span></span></a></li>`; };
+  const up = list.filter(x => x.r > 0).sort((a, b) => b.r - a.r).slice(0, 3), down = list.filter(x => x.r < 0).sort((a, b) => a.r - b.r).slice(0, 3);
+  if (!up.length && !down.length) return '';
+  return `<div class="mv-pair">${[['오늘 많이 오른 선수', up], ['오늘 많이 내린 선수', down]].map(([h, l]) => `<section class="movers"><h2>${h}</h2>
+    ${l.length ? `<ol>${l.map(row).join('')}</ol>` : '<p class="note">해당 선수 없음</p>'}</section>`).join('')}</div>
+    <p class="note">네 구단 명단에서 시세 1,000만 BP 이상인 선수의 어제 대비 등락</p>`;
+}
+
 const notFound = what => `<div class="bar"><h1>${what}</h1></div><a class="btn" href="#/">구단 목록으로</a>`;
 
 // ---------- 그리기 ----------
@@ -645,9 +837,9 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : viewHome();
-  document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (view === 'watch' ? 'watch' : 'home')));
-  document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : '구단 시세판';
+  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
+  document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h'].includes(view) ? view : 'home')));
+  document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();
   document.querySelectorAll('[data-roll]').forEach(el => {  // 값이 바뀐 숫자만 넘어오며 바뀜
     const k = location.hash + el.dataset.roll, v = el.textContent;
@@ -700,6 +892,7 @@ document.addEventListener('click', e => {
   else if (d.sort) { ui.sort = d.sort; render(); }
   else if (d.range) { const id = b.closest('[data-chart]').dataset.chart; ui.range[id] = d.range;
     b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b)); drawChart(id, charts[id]); }
+  else if ('more' in d) { ui.more = true; render(); }
   else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
   else if ('reload' in d) load();
   else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), withEntry({ ...p, grade }), { ...p, grade }); }
@@ -723,7 +916,7 @@ document.addEventListener('keydown', e => { const plot = e.target.closest?.('.pl
 document.addEventListener('error', e => { const img = e.target;  // 선수 사진 : 동작 사진이 없으면 얼굴 사진, 그것도 없으면 빈 칸
   if (!img.classList?.contains('face')) return;
   if (!img.dataset.fb) { img.dataset.fb = 1; img.src = `${CDN}players/p${img.dataset.pid}.png`; } else img.style.visibility = 'hidden'; }, true);
-addEventListener('hashchange', () => { ui.msg = ''; ui.edit = false; ui.needToken = false; namesFailed = false; render(); scrollTo(0, 0); });
+addEventListener('hashchange', () => { ui.msg = ''; ui.edit = false; ui.more = false; ui.needToken = false; namesFailed = false; render(); scrollTo(0, 0); });
 addEventListener('resize', () => Object.entries(charts).forEach(([id, r]) => drawChart(id, r)));
 document.addEventListener('visibilitychange', () => document.hidden || load());
 setInterval(load, 60000);
