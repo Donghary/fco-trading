@@ -309,8 +309,8 @@ def baselines():
 
 def write_official():
     """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
-    # 시즌 : 구단주 본인 쪽 seasonId 기준. 다른 번호의 기간 안에 끼어 잠깐 나오는 번호(예 : 202606 기간 중 하루 202611)는
-    # 같은 공식경기 코드로 오는 다른 모드로 보고 따로 묶음 (2026-11-18 사용자와 합의)
+    # 시즌 : 구단주 본인 쪽 seasonId 기준. 다른 번호의 기간 안에 끼어 잠깐 나오는 번호(예 : 202606 기간 중 11.06 밤 202611)는
+    # 그 기간의 시즌에 합침. 같은 경기 상대는 대부분 202606 이고 fcgg 도 일반 공식경기로 보여 주므로 모드 차이가 아니라 넥슨 기록의 일시적 값으로 봄
     rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
     span = {}
     for rs in rows.values():
@@ -322,11 +322,13 @@ def write_official():
     main = sorted((k for k in span if k not in side), key=lambda k: span[k][1], reverse=True)
     for rs in rows.values():
         for r in rs:
+            if r["s"] in side:  # 끼어 있는 번호는 그 날짜를 품은 시즌으로
+                r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), r["s"])
             if not r["s"]:  # 시즌 번호를 아직 못 받은 경기는 날짜로 추정
                 r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), main[0] if main else None)
             r["s"] = str(r["s"]) if r["s"] else "전체"
-    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): f"다른 모드 추정 ({k})" for k in side} | {"전체": "시즌 구분 전"}
-    seasons = [str(k) for k in main] + [str(k) for k in sorted(side)] + ["전체"]
+    labels = {str(k): f"시즌 {k}" for k in main} | {"전체": "시즌 구분 전"}
+    seasons = [str(k) for k in main] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None
     base = baselines().get("official", {})
