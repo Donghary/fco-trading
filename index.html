@@ -750,7 +750,7 @@ const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
 const FAR = 18;  // 중거리 기준 : 골문 중앙에서 18m 이상 (사용자 기준, 박스 안팎 무관)
 const goalLine = (g, who) => { const d = dist(g);
   return `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')}${who ? ` <span class="gw">(${esc(who)})</span>` : ''}, ${shotName(g.t)}${d != null ? `, 약 ${Math.round(d)}m${d >= FAR ? ' 중거리' : ''}` : ''}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`; };
-function goalKinds(goals) {  // [종류별 수, 박스 밖, 도움 없음, 위치를 아는 골 수]
+function goalKinds(goals) {  // 종류별 수, 중거리(18m 이상), 도움 없음, 위치를 아는 골 수
   const kinds = {}; let out = 0, solo = 0, known = 0;
   goals.forEach(g => { const n = shotName(g.t); kinds[n] = (kinds[n] || 0) + 1; if (!g.a) solo++; if (g.x) { known++; if (dist(g) >= FAR) out++; } });
   return { kinds, out, solo, known };
