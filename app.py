@@ -347,7 +347,7 @@ def write_official():
             by.setdefault(r["s"], []).append(r)
         out[n]["sum"] = {str(k): summary(n, k, v) for k, v in by.items() if k}
         out[n]["rows"] = by.get(cur, [])
-    write("official.json", {"pending": PENDING[0], "current": cur, "labels": labels, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
+    write("official.json", {"pending": PENDING[0], "current": cur, "order": seasons, "labels": labels, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
     for i, season in enumerate(seasons[1:], 1):
         write(f"official_{i}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
 

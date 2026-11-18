@@ -851,7 +851,7 @@ function viewOfficial(i, season) {
   const mine = O.owners[o.nick] || { sum: {}, rows: [] }, s = season ? decodeURIComponent(season) : O.current, isCur = String(s) === String(O.current);
   const past = isCur ? null : file(`official_${O.files?.[s]}.json`);
   const rows = isCur ? mine.rows : past?.owners?.[o.nick] || [], sum = mine.sum[s];
-  const seasons = Object.entries(mine.sum).sort((x, y) => y[0].localeCompare(x[0]));
+  const rank = k => (O.order || []).indexOf(k), seasons = Object.entries(mine.sum).sort((x, y) => rank(x[0]) - rank(y[0]));  // 지금 시즌, 지난 시즌, 다른 모드 순
   const list = seasons.length > 1 || !isCur ? `<section><h2>시즌</h2><div class="gt"><span class="h">시즌</span><span class="h n">경기</span><span class="h n">승률</span>
     ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(O.labels?.[k] || k)}${k === O.current ? ' (지금)' : ''}<span class="gw"> ${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</span></a>
       <span class="n num">${v.w + v.d + v.l}</span><span class="n num">${pct([v.w, v.d, v.l])}%</span>`).join('')}</div></section>` : '';
