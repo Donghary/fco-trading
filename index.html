@@ -273,7 +273,8 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .kv div { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .kv dt { color: var(--muted); font-size: 12px; }
 .kv dd { font-size: 17px; }
-.gt { display: grid; grid-template-columns: minmax(0, 1fr) 100px 100px; gap: 0 8px; }
+.gt { display: grid; grid-template-columns: minmax(0, 1fr) 100px 100px; }
+.gt .n { padding-left: 8px; }
 .gt > * { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .gt .h { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gt .n { text-align: right; font-size: 17px; }
@@ -292,6 +293,9 @@ details.mt ol li { padding: 3px 0; color: var(--flat); font-size: 13px; }
 details.mt ol li::before { content: none; }
 details.mt ol .num { color: var(--muted); display: inline-block; min-width: 30px; }
 .gw { color: var(--muted); }
+details.mt.off summary { grid-template-columns: 22px auto minmax(0, 1fr) auto auto; }
+details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.gt .sub { color: var(--muted); }
 
 @media (min-width: 760px) {
   .mv-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
@@ -564,7 +568,7 @@ function viewOwner(i) {
       ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 공식 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
       + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
     ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
-    ${off.length ? `<div class="bar"><h2>최근 공식경기</h2></div><ol class="rows">${off.map(m => `<li class="of">${chip(m.r)}<span class="sc num">${m.g ?? '-'} : ${m.og ?? '-'}</span>
+    ${off.length ? `<div class="bar"><h2>최근 공식경기</h2><a class="btn quiet" href="#/o/${i}/off">전체 기록 보기</a></div><ol class="rows">${off.map(m => `<li class="of">${chip(m.r)}<span class="sc num">${m.g ?? '-'} : ${m.og ?? '-'}</span>
       <span class="op">${esc(m.op)}${m.pk[0] || m.pk[1] ? `<span class="tag">승부차기 ${m.pk[0]} : ${m.pk[1]}</span>` : ''}${m.e === 1 ? '<span class="tag">몰수승</span>' : m.e === 2 ? '<span class="tag">몰수패</span>' : ''}</span><time>${mdate(m.d)}</time></li>`).join('')}</ol>` : ''}
     <div class="bar"><h2>${esc(o.nick)}의 관심선수 ${watchOf(o.nick).length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
     ${watchOf(o.nick).length ? `<ol class="rows">${watchOf(o.nick).map(p => playerRow(p)).join('')}</ol>` : ''}
@@ -741,6 +745,15 @@ const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 슈팅 종류 : 3 헤더, 8 프리킥, 9 페널티킥은 경기 요약 숫자와 대조해 확인함. 나머지는 넥슨 번호표 기준, 이름이 없는 번호는 기타
 const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '칩슛', 5: '플레어', 6: '낮은 슛', 7: '발리', 8: '프리킥', 9: '페널티킥', 10: '무회전', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
+// 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
+const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
+const goalLine = (g, who) => { const d = dist(g);
+  return `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')}${who ? ` <span class="gw">(${esc(who)})</span>` : ''}, ${shotName(g.t)}${d != null ? `, 약 ${Math.round(d)}m${g.in ? '' : ' 박스 밖'}` : ''}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`; };
+function goalKinds(goals) {  // [종류별 수, 박스 밖, 도움 없음, 위치를 아는 골 수]
+  const kinds = {}; let out = 0, solo = 0, known = 0;
+  goals.forEach(g => { const n = shotName(g.t); kinds[n] = (kinds[n] || 0) + 1; if (!g.a) solo++; if (g.x) { known++; if (!g.in) out++; } });
+  return { kinds, out, solo, known };
+}
 
 function duel(ms, a, b) {  // a 기준 기록
   const st = { n: 0, res: [], gf: 0, ga: 0, forf: 0, poss: 0, sh: [0, 0], sot: [0, 0], types: {}, sc: [{}, {}] };
@@ -799,18 +812,53 @@ function viewDuel(H, i, j) {
       <div><dt>평균 점유율</dt><dd class="num">${Math.round(st.poss / st.n)}%</dd></div><div><dt>슈팅</dt><dd class="num">${st.sh[0]} : ${st.sh[1]}</dd></div>
       <div><dt>유효슈팅</dt><dd class="num">${st.sot[0]} : ${st.sot[1]}</dd></div><div><dt>몰수 경기</dt><dd class="num">${st.forf}</dd></div></dl>
     ${types.length ? `<section><h2>골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">${esc(A)}</span><span class="h n">${esc(B)}</span>
-      ${types.map(([k, [x, y]]) => `<span>${k}</span><span class="n num ${x ? '' : 'z'}">${x}</span><span class="n num ${y ? '' : 'z'}">${y}</span>`).join('')}</div></section>` : ''}
+      ${types.map(([k, [x, y]]) => `<span>${k}</span><span class="n num ${x ? '' : 'z'}">${x}</span><span class="n num ${y ? '' : 'z'}">${y}</span>`).join('')}
+      ${(() => { const ka = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === A).goals)), kb = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === B).goals));
+        return `${ka.known + kb.known ? `<span class="sub">박스 밖 골 (중거리)</span><span class="n num">${ka.out}</span><span class="n num">${kb.out}</span>` : ''}
+          <span class="sub">도움 없는 골</span><span class="n num">${ka.solo}</span><span class="n num">${kb.solo}</span>`; })()}</div>
+      ${ms.some(m => m.p.some(p => p.goals.some(g => !g.x && g))) ? '<p class="note">박스 밖 골은 골 위치를 받은 경기만 셈. 예전 경기는 위치를 다시 받는 중</p>' : ''}</section>` : ''}
     <section><h2>최다 득점 선수</h2><div class="scorers">${[0, 1].map(side => `<div><h3>${esc(side ? B : A)}</h3><ol>${top(side).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('') || '<li><span>골 없음</span></li>'}</ol></div>`).join('')}</div></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
       const me = m.p.find(p => p.nick === A), op = m.p.find(p => p.nick === B);
       const goals = [...me.goals.map(g => ({ ...g, who: A })), ...op.goals.map(g => ({ ...g, who: B }))].sort((x, y) => x.m - y.m);
       const pk = me.pk || op.pk ? `<span class="tag">승부차기 ${me.pk} : ${op.pk}</span>` : '', forf = me.end === 1 ? '<span class="tag">몰수승</span>' : me.end === 2 ? '<span class="tag">몰수패</span>' : '';
       return `<details class="mt"><summary>${chip(me.res)}<span class="num">${me.goal ?? '-'} : ${op.goal ?? '-'}</span><time>${mdate(m.date)}${pk}${forf}</time></summary>
-        <ol>${goals.map(g => `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')} <span class="gw">(${esc(g.who)})</span>, ${shotName(g.t)}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`).join('') || '<li>골 없음</li>'}</ol></details>`;
+        <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
     }).join('')}</section>
     ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
     <p class="note">골 종류에서 헤더, 프리킥, 페널티킥은 확인한 분류이고, 나머지는 넥슨이 공개한 번호표를 따름. 이름이 없는 번호는 기타 슛으로 묶음.</p>`
     : '<p class="note">이 두 사람이 붙은 기록이 아직 없음</p>'}`;
+}
+
+// ---------- 공식경기 전체 기록 ----------
+function viewOfficial(i) {
+  const o = S.owners[i];
+  if (!o) return notFound('없는 구단주');
+  const O = file('official.json'), head = `<div class="head"><a class="btn" href="#/o/${i}" aria-label="${esc(o.nick)} 화면으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)} 공식경기</b></h1></div>`;
+  if (!O) return head + (files['official.json']?.err ? '<p class="note">기록을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div><div class="skel"></div>');
+  const rows = O.owners[o.nick] || [];
+  if (!rows.length) return head + `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`;
+  const t = tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
+  const k = goalKinds(rows.flatMap(r => r.mg)), sc = {};
+  rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
+  const first = rows.at(-1), show = ui.more ? rows : rows.slice(0, 20);
+  return head + `<div class="quote duel"><div class="big num">${wdl(t)}</div>
+      <div class="ofform"><span>${rows.length}경기, 승률 ${pct(t)}%, ${mdate(first.d).split(' ')[0]}부터</span>${form(rows.map(r => r.r))}</div></div>
+    <dl class="kv"><div><dt>현재 티어</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>기간 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
+      <div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
+    <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
+      ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${Math.round(c / gf * 100)}%</span>`).join('')}
+      ${k.known ? `<span class="sub">박스 밖 골 (중거리)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}
+      <span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num">${gf ? Math.round(k.solo / gf * 100) : 0}%</span></div></section>
+    <section><h2>최다 득점 선수</h2><ol class="scorers" style="display:block">${Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('')}</ol></section>
+    <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
+      const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
+      const tags = `${r.pk[0] || r.pk[1] ? `<span class="tag">승부차기 ${r.pk[0]} : ${r.pk[1]}</span>` : ''}${r.e === 1 ? '<span class="tag">몰수승</span>' : r.e === 2 ? '<span class="tag">몰수패</span>' : ''}`;
+      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${tags}</span><time>${mdate(r.d)}</time></summary>
+        <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
+    }).join('')}</section>
+    ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
+    <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라 그 이후로 계속 쌓아 감. 티어는 경기마다 기록된 그 경기 당시 티어임.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
 
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
@@ -838,7 +886,7 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? viewOwner(+a) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
+  $('#app').innerHTML = view === 'o' ? (b === 'off' ? viewOfficial(+a) : viewOwner(+a)) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
   document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h'].includes(view) ? view : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();

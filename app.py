@@ -32,7 +32,7 @@ REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 
 SQUAD_MIN = 60  # 명단 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
-MATCH_PER_RUN = 50  # 한 번에 받을 경기 상세 수 (일일 한도를 나눠 씀)
+MATCH_PER_RUN = 20  # 한 번에 받을 경기 상세 수 (일일 한도를 나눠 씀)
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
@@ -110,15 +110,16 @@ def match_rec(d, by_ouid):
     def side(x):
         md, sh = x.get("matchDetail") or {}, x.get("shoot") or {}
         goals = [{"t": g.get("type"), "sp": g.get("spId"), "g": g.get("spGrade"), "a": g.get("assistSpId") if g.get("assist") else 0,
-                  "m": minute(g.get("goalTime") or 0)} for g in x.get("shootDetail") or [] if g.get("result") == 3]
+                  "m": minute(g.get("goalTime") or 0), "x": round(g.get("x") or 0, 3), "y": round(g.get("y") or 0, 3), "in": bool(g.get("inPenalty"))}
+                 for g in x.get("shootDetail") or [] if g.get("result") == 3]
         return {"nick": by_ouid.get(x["ouid"], x.get("nickname", "")), "own": x["ouid"] in by_ouid, "res": md.get("matchResult"),
                 "end": md.get("matchEndType"), "goal": sh.get("goalTotal"), "pk": sh.get("shootOutScore"), "poss": md.get("possession"),
                 "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"), "goals": goals}
-    return {"date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}
+    return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
 
 
 def refresh_matches():
-    """네 명끼리 붙은 클래식 1on1(40) 과 각자의 최근 공식경기(50) 상세를 받아 쌓음"""
+    """네 명끼리 붙은 클래식 1on1(40) 과 각자의 공식경기(50) 상세를 받아 쌓음. 넥슨은 최근 약 30일만 주므로 받은 것은 계속 보관"""
     owners = {n: s["ouid"] for n, s in STATE["squads"].items() if s.get("ouid")}
     if len(owners) < 2:
         return
@@ -133,17 +134,35 @@ def refresh_matches():
             if len(got) < 100:
                 break
     h2h = [m for m, who in seen.items() if len(who) >= 2]  # 두 명 이상의 목록에 같이 있으면 네 명끼리 경기
-    official = [m for s in STATE["squads"].values() for m in s.get("official", [])]
-    todo = [m for m in dict.fromkeys(official + STATE["queue"] + h2h) if m not in cache]
+    off_first = not STATE["off_seeded"]
+    for n, o in owners.items():  # 공식경기 목록 : 처음 한 번은 30일 치 전부, 이후는 최근 20경기
+        got = []
+        for off in range(0, 1000 if off_first else 1, 100):
+            page = nexon("user/match", ouid=o, matchtype=50, offset=off, limit=100 if off_first else 20)
+            got += page
+            if len(page) < 100:
+                break
+        STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
+    recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
+    older = [m for ids in STATE["off"].values() for m in ids]
+    stale = [m for m, r in cache.items() if r.get("v") != 2]  # 골 위치가 없는 예전 기록은 다시 받음
+    todo = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older + stale) if m not in cache or cache[m].get("v") != 2]
+    done = 0
     for m in todo[:MATCH_PER_RUN]:
         try:
             cache[m] = match_rec(nexon("match-detail", matchid=m), by_ouid)
+            done += 1
         except Exception as e:
             print("경기 상세 실패", m, e, file=sys.stderr)
-    keep = set(official)  # 공식경기는 최근 10경기만, 네 명끼리 경기는 계속 보관
-    STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or m in keep}
-    STATE["queue"], STATE["seeded"] = todo[MATCH_PER_RUN:], True  # 못 받은 경기는 다음 실행에서 이어 받음
-    PENDING[0] = len(STATE["queue"])
+            if "429" in str(e):
+                break  # 한도에 걸리면 이번 실행은 여기까지
+    left = todo[done:]
+    cut = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - VALUE_DAYS * 86400))
+    keep = set(recent) | {m for ids in STATE["off"].values() for m in ids}
+    STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or (m in keep and r["date"] >= cut)}
+    STATE["off"] = {n: [m for m in ids if m in STATE["matches"] or m in left] for n, ids in STATE["off"].items()}
+    STATE["queue"], STATE["seeded"], STATE["off_seeded"] = [m for m in left if m in h2h or m in STATE["queue"]], True, True
+    PENDING[0] = len(left)
     if PENDING[0]:
         print("경기 상세", PENDING[0], "건은 다음 갱신 때 받음")
 
@@ -195,7 +214,7 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -254,6 +273,26 @@ def read_watch():
     lists = raw if isinstance(raw, dict) else {}
     return {n: [{"spid": w["spid"], "grade": w["grade"]} for w in lists.get(n, []) if ok(w)][:30]
             if isinstance(lists.get(n, []), list) else [] for n in OWNERS}
+
+
+def official_rows(nick, ids, goals=False):
+    named = lambda g: {**g, "n": NAMES.get(g["sp"], ""), "an": NAMES.get(g["a"], "") if g["a"] else ""}
+    rows = []
+    for m in ids:
+        r = STATE["matches"].get(m)
+        if not r or len(r["p"]) != 2:
+            continue
+        me = next((p for p in r["p"] if p["nick"] == nick), None)
+        if not me:
+            continue
+        op = r["p"][1] if r["p"][0] is me else r["p"][0]
+        row = {"d": r["date"], "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
+               "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")}
+        if goals:
+            row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
+                       mg=[named(g) for g in me["goals"]], og2=[named(g) for g in op["goals"]])
+        rows.append(row)
+    return sorted(rows, key=lambda r: r["d"], reverse=True)
 
 
 def official_of(nick, s):
@@ -345,6 +384,7 @@ def build():
         "lock": (ROOT / "lock.json").exists(),  # 친구용 편집 비밀번호가 정해졌는지
     })
     write("values.json", STATE["value"])
+    write("official.json", {"pending": PENDING[0], "owners": {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}})
     own = set(OWNERS)
     named = lambda g: {**g, "n": NAMES.get(g["sp"], ""), "an": NAMES.get(g["a"], "") if g["a"] else ""}
     write("h2h.json", {"pending": PENDING[0], "matches": sorted(({"id": m, "date": r["date"], "p": [{**p, "goals": [named(g) for g in p["goals"]]} for p in r["p"]]}
