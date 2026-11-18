@@ -349,7 +349,7 @@ def write_official():
         name = "리그" if not last else "레전더리 리그" if last <= 1300 else "월드클래스 리그" if last <= 2200 else "프로 리그"
         return name  # 날짜는 화면에서 시즌 줄 아래에 붙임
 
-    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): "리그" for k in side} | {"전체": "시즌 구분 전"}
+    labels = {str(k): f"{str(k)[:4]}-{int(str(k)[4:])}차" for k in main} | {str(k): "리그" for k in side} | {"전체": "시즌 구분 전"}  # 202606 → 2026-6차 (게임 표기)
     seasons = [str(k) for k in main] + [str(k) for k in sorted(side, key=lambda k: span[k][0], reverse=True)] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None

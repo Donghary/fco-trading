@@ -93,7 +93,8 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-main:hover { background: var(--panel); }
 .q-name { font-size: 17px; font-weight: 700; letter-spacing: -.02em; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-val { font-size: 32px; line-height: 1.05; text-align: right; }
-.q-sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-sub { color: var(--muted); font-size: 13px; }
+.q-sub > span { white-space: nowrap; }  /* 티어와 전적 사이에서만 줄을 넘김 */
 .q-chg { display: grid; grid-template-columns: auto auto auto; justify-content: end; align-items: baseline; gap: 1px 10px; font-size: 16px; }
 .q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); }
 .q-chg .chg, .q-chg .amt { justify-self: end; }
@@ -561,9 +562,9 @@ function rating(p, add) {
   return `<span class="pos">${esc(hit ? p.pos : pos)}</span><span class="ovr-n num"><span class="sr">오버롤 </span>${v + add}</span>${p.pos === 'SUB' ? '<span class="pos">SUB</span>' : ''}`;
 }
 const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
-function playerList(players, team, ctx) {
+function playerList(players, team, ctx, title) {
   const f = SORTS[ui.sort][1];
-  return `<div class="bar"><h2>선수 ${players.length}명</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
+  return `<div class="bar"><h2>${title || `선수 ${players.length}명`}</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
       `<button class="btn quiet" data-sort="${k}" aria-pressed="${k === ui.sort}">${label}순</button>`).join('')}</div></div>
     <ol class="rows">${[...players].sort((a, b) => f(b) - f(a)).map(p => playerRow(p, '', team ? chem(team, p.grade) : chemSolo(p.grade), ctx)).join('')}</ol>`;
 }
@@ -579,14 +580,14 @@ function viewHome() {
     return `<li class="q"><a class="q-main" href="#/o/${o.i}">
         <span class="q-name">${esc(o.nick)}</span>
         <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
-        <span class="q-sub">${o.official?.length ? `${o.div ? esc(o.div) + ', ' : ''}공식 ${(([w, d, l]) => `${w}승 ${d}무 ${l}패`)(tally(o.official.map(m => m.r)))}` : o.players.length ? `선수 ${o.players.length}명` : '최근 경기 기록 없음'}</span>
+        <span class="q-sub">${o.official?.length ? `${o.div ? `<span>${esc(o.div)},</span> ` : ''}<span>최근 ${o.official.length}경기 ${(([w, d, l]) => `${w}승 ${d}무 ${l}패`)(tally(o.official.map(m => m.r)))}</span>` : o.players.length ? `선수 ${o.players.length}명` : '최근 경기 기록 없음'}</span>
         <span class="q-chg"><span class="lbl">1일</span>${p1}${a1 || '<span></span>'}<span class="lbl">7일</span>${p7}${a7 || '<span></span>'}</span>
         ${o.error ? `<span class="q-err">${esc(o.error)}</span>` : ''}${line}</a>
       ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
         <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
   }).join('');
   const w = Object.values(watchAll()).flat();
-  return `<div class="bar"><h1>구단 가치 (BP), 현재 명단 기준 30일 추이</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
+  return `<div class="bar"><h1>구단 가치</h1><button class="btn quiet" data-edit aria-pressed="${ui.edit}">${ui.edit ? '순서 편집 끝내기' : '순서 편집'}</button></div>
     <ol class="board ${ui.edit ? 'editing' : ''}">${rows}</ol>
     ${ui.edit ? '' : movers()}
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
@@ -602,30 +603,30 @@ function viewOwner(i, tab, season) {
   const top = `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
     ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
-      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 공식 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
+      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
       : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
     <nav class="otabs" aria-label="${esc(o.nick)} 화면 구역">${tabs.map(([k, label, n]) => `<a href="#/o/${i}${k === 'players' ? '' : '/' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}${n !== '' ? `<span class="num">${n}</span>` : ''}</a>`).join('')}</nav>`;
   if (tab === 'off') return top + viewOfficial(i, season);
   if (tab === 'watch') return top + `<div class="bar"><h2>${esc(o.nick)}의 관심선수 ${w.length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
-    ${w.length ? `<ol class="rows">${w.map(p => playerRow(p)).join('')}</ol>` : `<p class="note">아직 관심선수가 없음. "선수 찾아 추가"에서 이름으로 찾아 저장하면 여기서 시세를 따라감</p>`}`;
+    ${w.length ? `<ol class="rows">${w.map(p => playerRow(p)).join('')}</ol>` : `<p class="note">아직 관심선수가 없음. 선수 찾아 추가에서 저장</p>`}`;
   const pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
   const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) }));
-  const since = real.length ? `실제 기록, ${clock(real[0].t)}부터 쌓는 중` : '실제 기록을 쌓기 시작함';
+  const since = real.length ? `${clock(real[0].t).split(' ')[0]}부터 기록` : '기록 시작';
   const day = (() => { const start = S.updated - 86400, before = real.filter(p => p.t < start).at(-1);
     return [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...real.filter(p => p.t >= start)]; })();
-  const back = '현재 명단을 그때 시세로 계산한 값';
+  const back = '현재 명단 기준';
   const ranges = [{ id: '24h', label: '24시간', pts: day, step: true, note: since }, { id: '7d', label: '7일', pts: pts.slice(-8), note: back },
                   { id: '30d', label: '30일', pts, best: true, note: back }, { id: 'rec', label: '전체 기록', pts: real, step: true, note: since }];
   if (t.n) after = () => drawChart('team', ranges);
   return top + `${t.n ? chartHTML('team', ranges) : ''}
-    ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
-    <p class="note">명단은 가장 최근 경기(${o.match ? mdate(o.match) : '-'})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
+    ${o.players.length ? playerList(o.players, o.players, '/o' + i, `선수 ${o.players.length}명, ${o.match ? mdate(o.match).split(' ')[0] + ' 경기, ' : ''}${chem(o.players, 8) ? `풀케미 +8${chem(o.players, 11) === 9 ? '/+9' : ''}` : '적응도 5'}`) : ''}
+    `;
 }
 
 function playerRanges(d) {
   const now = S.updated, cur = d.now ? [{ t: now, v: d.now, lab: '현재' }] : [];
   const intra = d.intra.map(([t, v]) => ({ t, v, lab: clock(t) }));
-  const since = intra.length ? `시간대별 기록은 ${clock(intra[0].t)}부터 쌓는 중` : '시간대별 기록을 쌓기 시작함';
+  const since = intra.length ? `${clock(intra[0].t).split(' ')[0]}부터 기록` : '기록 시작';
   const win = (hours) => {  // 창 시작 시점의 값을 이어 붙여 선이 창 왼쪽 끝에서 시작하게 함
     const start = now - hours * 3600, inside = intra.filter(p => p.t >= start), before = intra.filter(p => p.t < start).at(-1);
     const pts = [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...inside, ...cur];
@@ -650,7 +651,7 @@ function viewPlayer(spid, grade, ctx) {
   const d = detail[k].data, mine = who(), saved = watchOf(mine).some(w => key(w) === k);
   const back = `<button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button>`;
   if (!d) return `<div class="head">${back}<h1>추적하지 않는 선수</h1></div>
-    <p class="note">이 선수는 아직 시세를 받아오지 않음. 구단 명단에 있거나 관심선수로 저장된 선수만 추적함. 방금 저장했다면 1~2분 뒤에 다시 열면 됨</p>
+    <p class="note">시세를 받지 않는 선수임. 관심선수로 저장하면 1~2분 뒤부터 보임</p>
     <a class="btn" href="#/watch">관심선수에서 찾아 저장</a>`;
   const ranges = playerRanges(d), f = d.info || {};
   after = () => drawChart('player', ranges);
@@ -685,16 +686,16 @@ const watchOf = nick => watchAll()[nick] || [];
 async function repoWrite(path, change, message) {
   const url = `https://api.github.com/repos/${S.repo}/contents/${path}`, headers = { Authorization: 'Bearer ' + LS.get('token', ''), Accept: 'application/vnd.github+json' };
   const cur = await fetch(url, { headers, cache: 'no-store' });
-  if (cur.status === 401) throw new Error('편집 권한이 만료되었거나 맞지 않음. 비밀번호나 토큰을 다시 넣어야 함');
+  if (cur.status === 401) throw new Error('편집 권한이 만료됨. 비밀번호를 다시 넣어야 함');
   if (!cur.ok && cur.status !== 404) throw new Error('이 권한으로는 저장소에 접근할 수 없음');
   const file = cur.ok ? await cur.json() : null;
   const next = change(file ? JSON.parse(new TextDecoder().decode(unb64(file.content.replace(/\s/g, '')))) : null);  // 한글 구단주명이 들어가므로 UTF-8 로 다룸
   const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message, content: b64(new TextEncoder().encode(JSON.stringify(next))), ...(file && { sha: file.sha }) }) });
-  if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 토큰에 Contents 쓰기 권한이 있는지 확인해야 함');
+  if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 잠시 뒤 다시 누르면 됨');
   return next;
 }
 async function saveWatch(nick, change, entry) {
-  if (!LS.get('token', '')) { ui.msg = '저장하려면 편집 권한이 필요함. 관심선수 화면 아래 "편집 권한"에서 한 번만 풀어 두면 됨'; ui.needToken = true; return render(); }
+  if (!LS.get('token', '')) { ui.msg = '저장하려면 관심선수 탭 아래 편집 권한에서 비밀번호를 한 번 넣어야 함'; ui.needToken = true; return render(); }
   ui.busy = true; ui.msg = ''; render();
   try {
     const lists = await repoWrite('watchlist.json', cur => { const all = cur && !Array.isArray(cur) ? cur : {}; return { ...all, [nick]: change(all[nick] || []) }; }, '관심선수 변경');
@@ -714,7 +715,7 @@ async function passKey(pass, salt) {
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-async function lockToken(pass, token) {
+async function lockToken(pass, token) {  // 비밀번호를 새로 정할 때만 씀 (지금은 화면에 없음, 필요하면 직접 실행)
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
   return { salt: b64(salt), iv: b64(iv), data: b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await passKey(pass, salt), new TextEncoder().encode(token))) };
 }
@@ -726,13 +727,6 @@ async function unlock(pass) {
   try { LS.set('token', await unlockToken(pass, await (await fetch('lock.json?t=' + Date.now())).json())); ui.msg = '이 기기에서 저장할 수 있게 됨'; ui.needToken = false; }
   catch { ui.msg = '비밀번호가 맞지 않음'; ui.needToken = true; }
   ui.busy = false; render();
-}
-async function setLock(pass) {
-  if (pass.length < 4) { ui.msg = '비밀번호는 4자 이상이어야 함'; ui.needToken = true; return render(); }
-  ui.busy = true; render();
-  try { const lock = await lockToken(pass, LS.get('token', '')); await repoWrite('lock.json', () => lock, '편집 비밀번호 변경'); ui.msg = '비밀번호를 정함. 1~2분 뒤부터 친구들이 이 비밀번호로 저장할 수 있음'; }
-  catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
-  ui.busy = false; ui.needToken = true; render();
 }
 
 function search(q) {
@@ -752,7 +746,7 @@ function viewWatch() {
     <label class="lab first" for="who">누구의 목록</label>
     <select class="field wide" id="who">${S.owners.map(o => `<option value="${esc(o.nick)}" ${o.nick === nick ? 'selected' : ''}>${esc(o.nick)} (${watchOf(o.nick).length}명)</option>`).join('')}</select>
     ${list.length ? `<ol class="rows listed">${list.map(p => playerRow(p, `<button class="btn quiet" data-toggle="${key(p)}" data-who="${esc(nick)}" aria-label="${esc(p.name)} 관심선수에서 빼기" ${ui.busy ? 'disabled' : ''}>빼기</button>`)).join('')}</ol>`
-      : `<p class="note"><b>${esc(nick)} 목록이 비어 있음.</b> 아래에서 이름으로 찾아 저장하면 구단 선수처럼 시세를 따라감</p>`}
+      : `<p class="note">${esc(nick)} 목록이 비어 있음. 아래에서 찾아 저장</p>`}
     <label class="lab" for="q">선수 찾아 ${esc(nick)} 목록에 저장</label>
     <form class="find" data-find><input class="field" id="q" type="search" value="${esc(ui.q)}" placeholder="예 : 손흥민" autocomplete="off" enterkeyhint="search"><button class="btn go">찾기</button></form>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
@@ -762,15 +756,9 @@ function viewWatch() {
         <select class="field" id="g${i}" aria-label="${esc(p.name)} 강화 단계">${[...Array(13).keys()].map(g => `<option value="${g + 1}">${g + 1}강</option>`).join('')}</select>
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
     <details class="perm" ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
-      ${token ? `<p class="note">이 기기에서 관심선수를 저장하고 뺄 수 있음. 친구들이 토큰 없이 쓰게 하려면 비밀번호를 정해서 알려주면 됨</p>
-        <form class="find" data-setlock><input class="field" id="newpass" type="password" placeholder="친구들과 쓸 비밀번호" autocomplete="new-password" aria-label="새 비밀번호"><button class="btn" ${ui.busy ? 'disabled' : ''}>${S.lock ? '비밀번호 바꾸기' : '비밀번호 정하기'}</button></form>
-        <p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>`
-      : `${S.lock ? `<p class="note">친구들과 정한 비밀번호를 넣으면 이 기기에서 저장할 수 있음. 한 번만 넣으면 됨</p>
-          <form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`
-        : '<p class="note">아직 비밀번호가 정해지지 않음. 저장소 주인이 아래에 토큰을 한 번 넣고 비밀번호를 정하면, 친구들은 비밀번호만으로 저장할 수 있음</p>'}
-        <p class="note">저장소 주인용 : GitHub 토큰 넣기</p>
-        <ol><li>GitHub 로그인 후 Settings, Developer settings, Fine-grained tokens 로 이동</li><li>Repository access 에서 ${esc(S.repo.split('/')[1])} 저장소만 선택</li><li>Permissions 의 Contents 를 Read and write 로 설정하고 토큰 생성</li><li>만들어진 토큰을 아래에 붙여넣기</li></ol>
-        <form class="find" data-token><input class="field" id="tok" type="password" placeholder="github_pat_..." autocomplete="off" aria-label="GitHub 토큰"><button class="btn">넣기</button></form>`}
+      ${token ? '<p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>'
+        : S.lock ? `<form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`
+        : '<p class="note">아직 비밀번호가 정해지지 않음</p>'}
     </details>`;
 }
 // ---------- 따로 받는 파일 (상대전적, 실제 구단 가치) ----------
@@ -859,7 +847,7 @@ function viewH2H(a, b) {
   }).sort((x, y) => pct(y.t) - pct(x.t) || y.st.res.length - x.st.res.length);
   const pairs = [];
   order.forEach((x, i) => order.slice(i + 1).forEach(y => pairs.push([x, y])));
-  return `<div class="bar"><h1>네 명 순위 (클래식 1on1)</h1></div>
+  return `<div class="bar"><h1>네 명 순위 (1대1, ${since}부터)</h1></div>
     <ol class="rows">${table.map(({ o, st, t }, i) => `<li><a class="lg" href="#/h2h/${o.i}"><span class="rk">${i + 1}</span><b>${esc(o.nick)}</b>
       <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></a></li>`).join('')}</ol>
     <div class="bar"><h2>상대별 전적</h2></div>
@@ -869,7 +857,7 @@ function viewH2H(a, b) {
         <span class="pbar" aria-hidden="true"><b style="flex:${t[0]}"></b><b style="flex:${t[1]}"></b><b style="flex:${t[2]}"></b></span>
         <span class="pm"><span>${t[0] + t[1] + t[2]}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
     }).join('')}</ol>
-    <p class="note">넥슨이 주는 경기 기록은 최근 30일뿐이라 ${since}부터 쌓기 시작함. 새 경기는 1시간마다 더해지고, 게임 안 통산 전적과는 다를 수 있음.${H.pending ? ` 아직 받는 중인 경기 ${H.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+    `;
 }
 
 function viewH2HOwner(H, i) {
@@ -886,7 +874,7 @@ function viewH2HOwner(H, i) {
   ms.forEach(m => me(m).goals.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
   const show = ui.more ? ms : ms.slice(0, 20), base = per.some(r => baseFor(H, o.nick, r.x.nick));
   return head + `<div class="quote duel sm"><div class="big num">${wdl(t)}</div>
-      <div class="ofform"><span>클래식 1on1, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${base ? ', 게임 안 기록 포함' : `, ${mdate(ms.at(-1).date).split(' ')[0]}부터`}</span>${form(ms.map(m => me(m).res))}</div></div>
+      <div class="ofform"><span>1대1, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${base ? ', 게임 안 기록 포함' : `, ${mdate(ms.at(-1).date).split(' ')[0]}부터`}</span>${form(ms.map(m => me(m).res))}</div></div>
     <dl class="kv"><div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div><div><dt>경기당 득점</dt><dd class="num">${(gf / ms.length).toFixed(1)} : ${(ga / ms.length).toFixed(1)}</dd></div>
       <div><dt>몰수 경기</dt><dd class="num">${ms.filter(m => me(m).end || opp(m).end).length}</dd></div></dl>
     <section><h2>상대별</h2><ol>${per.map(({ x, st, t }) => `<li><a class="pair" href="#/h2h/${i}/${x.i}"><span class="pa">${esc(o.nick)}</span><span class="ps num">${t[0]} : ${t[2]}<small>승률 ${pct(t)} : ${pct([t[2], t[1], t[0]])}%</small></span><span class="pb">${esc(x.nick)}</span>
@@ -904,7 +892,7 @@ function viewH2HOwner(H, i) {
         ${goalSides(goals, o.nick, b.nick, a.goal, b.goal)}</details>`;
     }).join('')}</section>
     ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">네 명끼리 붙은 클래식 1on1 기록임. 넥슨이 주는 기록은 최근 30일이라 그때부터 쌓기 시작했고, 새 경기는 1시간마다 더해짐.</p>`;
+    `;
 }
 
 function viewDuel(H, i, j) {
@@ -928,7 +916,7 @@ function viewDuel(H, i, j) {
         const ga = Object.values(ka.kinds).reduce((a, b) => a + b, 0), gb = Object.values(kb.kinds).reduce((a, b) => a + b, 0);
         return `${ka.known + kb.known ? `<span class="sub">중거리 골 (18m 이상)</span>${share(ka.out, ka.known)}${share(kb.out, kb.known)}` : ''}
           <span class="sub">도움 없는 골</span>${share(ka.solo, ga)}${share(kb.solo, gb)}`; })()}</div>
-      ${ms.some(m => m.p.some(p => p.goals.some(g => !g.x && g))) ? '<p class="note">중거리 골은 골 위치를 받은 경기만 셈. 예전 경기는 위치를 다시 받는 중</p>' : ''}</section>` : ''}
+      </section>` : ''}
     <section><h2>최다 득점 선수</h2><div class="scorers">${[0, 1].map(side => `<div><h3>${esc(side ? B : A)}</h3><ol>${top(side).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('') || '<li><span>골 없음</span></li>'}</ol></div>`).join('')}</div></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
       const me = m.p.find(p => p.nick === A), op = m.p.find(p => p.nick === B);
@@ -938,7 +926,7 @@ function viewDuel(H, i, j) {
         ${goalSides(goals, A, B, me.goal, op.goal)}</details>`;
     }).join('')}</section>
     ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">골 종류는 넥슨이 슛마다 남기는 종류 기록이고, 비율은 그 사람 골 전체 대비임(중거리는 위치를 아는 골 대비). 이름이 없는 종류 번호는 기타 슛으로 묶음.</p>`
+    `
     : '<p class="note">이 두 사람이 붙은 기록이 아직 없음</p>'}`;
 }
 
@@ -974,11 +962,11 @@ function viewOfficial(i, season) {
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
       const tags = `${r.pk[0] || r.pk[1] ? `<span class="tag">승부차기 ${r.pk[0]} : ${r.pk[1]}</span>` : ''}${r.e === 1 ? '<span class="tag">몰수승</span>' : r.e === 2 ? '<span class="tag">몰수패</span>' : ''}`;
-      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${r.ov ? `<span class="ov num">${compact(r.ov)}</span>` : ''}${tags}</span><time>${mdate(r.d)}</time></summary>
+      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${r.ov ? `<span class="ov">상대 <span class="num">${compact(r.ov)}</span></span>` : ''}${tags}</span><time>${mdate(r.d)}</time></summary>
         ${goalSides(goals, o.nick, r.op, r.g, r.og)}${r.olu ? lineup(r.olu, r.ov, r.op) : ''}</details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">상대 이름 옆 숫자는 그 경기 상대 명단의 구단 가치이고, 경기를 받은 시점의 시세로 매김. 티어는 넥슨이 경기마다 남기는 그 경기 때 티어라, 마지막 경기로 승급하거나 강등됐으면 다음 경기부터 반영됨. 넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+    `;
 }
 
 // ---------- 구단 검색 : 닉네임으로 아무 구단이나 명단과 구단 가치를 봄 (Cloudflare Worker 중계소, 넥슨 키는 거기에만 있음) ----------
@@ -999,7 +987,7 @@ function viewFind(q) {
   const form = `<div class="bar"><h1>구단 검색</h1></div>
     <form class="find" data-club><input class="field" id="club" type="search" value="${esc(q)}" placeholder="구단주 닉네임" autocomplete="off" enterkeyhint="search" aria-label="구단주 닉네임"><button class="btn go">찾기</button></form>
     ${!q && recent.length ? `<div class="recent">${recent.map(n => `<a class="btn" href="#/find/${encodeURIComponent(n)}">${esc(n)}</a>`).join('')}</div>` : ''}`;
-  if (!q) return form + '<p class="note">게임에서 만난 상대나 궁금한 구단의 닉네임을 넣으면, 가장 최근 경기에 나온 18명과 지금 시세로 계산한 구단 가치를 보여줌</p>';
+  if (!q) return form;
   lookup(q); loadNames();
   const f = found2[q];
   if (!f || f.busy) return form + '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
@@ -1012,9 +1000,9 @@ function viewFind(q) {
   return form + `<h2 class="fname">${esc(d.nick)}</h2>
     <div class="quote">${bigPrice(now)}${agoBlock(now, d1, d7)}
       <div class="ofform">${d.div ? `<span>${esc(d.div)}</span>` : ''}<span>${esc(d.mode)} ${mdate(d.match)}, ${esc(d.opp || '')} 상대 ${d.score[0] ?? '-'} : ${d.score[1] ?? '-'} ${esc(d.result || '')}</span></div></div>
-    <div class="bar"><h2>그 경기 명단 18명 (시세순)</h2></div>
+    <div class="bar"><h2>최근 ${esc(d.mode)} 명단 ${ps.length}명</h2></div>
     <ol class="rows">${[...ps].sort((a, b) => (b.now || 0) - (a.now || 0)).map(row).join('')}</ol>
-    <p class="note">명단은 그 구단의 가장 최근 공식경기(없으면 감독모드)에 나온 선수 기준이고, 시세는 지금 시세임. 같은 닉네임은 10분 동안 같은 결과를 보여줌.</p>`;
+    `;
 }
 
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
@@ -1027,9 +1015,9 @@ function movers() {
       <span class="mv-r"><span class="num">${compact(p.now)}</span><span>${pc} ${amt}</span></span></a></li>`; };
   const up = list.filter(x => x.r > 0).sort((a, b) => b.r - a.r).slice(0, 3), down = list.filter(x => x.r < 0).sort((a, b) => a.r - b.r).slice(0, 3);
   if (!up.length && !down.length) return '';
-  return `<div class="mv-pair">${[['오늘 많이 오른 선수', up], ['오늘 많이 내린 선수', down]].map(([h, l]) => `<section class="movers"><h2>${h}</h2>
+  return `<div class="mv-pair">${[['어제보다 많이 오른 선수', up], ['어제보다 많이 내린 선수', down]].map(([h, l]) => `<section class="movers"><h2>${h}</h2>
     ${l.length ? `<ol>${l.map(row).join('')}</ol>` : '<p class="note">해당 선수 없음</p>'}</section>`).join('')}</div>
-    <p class="note">네 구단 명단에서 시세 1,000만 BP 이상인 선수의 어제 대비 등락</p>`;
+    `;
 }
 
 const notFound = what => `<div class="bar"><h1>${what}</h1></div><a class="btn" href="#/">구단 목록으로</a>`;
@@ -1109,9 +1097,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if ('club' in e.target.dataset) { const q = $('#club').value.trim(); $('#club').blur(); if (q) { delete found2[q]; location.hash = '#/find/' + encodeURIComponent(q); } return; }
   if ('find' in e.target.dataset) { const q = $('#q').value.trim(); $('#q').blur(); location.hash = '#/watch' + (q ? '/' + encodeURIComponent(q) : ''); }
-  if ('token' in e.target.dataset) { LS.set('token', $('#tok').value.trim()); ui.msg = $('#tok').value.trim() ? '토큰을 이 기기에 넣어 둠. 이제 친구들과 쓸 비밀번호를 정하면 됨' : ''; ui.needToken = true; render(); }
   if ('unlock' in e.target.dataset) unlock($('#pass').value);
-  if ('setlock' in e.target.dataset) setLock($('#newpass').value);
 });
 // 차트 : 마우스를 올리거나 손가락으로 훑으면 그 시점의 값, 방향키로도 이동
 for (const type of ['pointermove', 'pointerdown']) document.addEventListener(type, e => { const plot = e.target.closest?.('.plot'); if (plot?._pts) hoverChart(plot, nearest(plot, e.clientX)); });
