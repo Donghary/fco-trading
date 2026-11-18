@@ -292,7 +292,7 @@ def official_rows(nick, ids, goals=False):
         if not me:
             continue
         op = r["p"][1] if r["p"][0] is me else r["p"][0]
-        row = {"d": r["date"], "s": me.get("season"), "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
+        row = {"d": r["date"], "s": me.get("season"), "dv": me["div"], "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
                "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")}
         if goals:
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
@@ -336,12 +336,17 @@ def write_official():
                 r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), main[0] if main else None)
             r["s"] = str(r["s"]) if r["s"] else "전체"
 
-    def league_name(k):  # 리그 이름 : 그 경기들의 등급 이름에서 숫자를 뗌 (예 : 월드클래스3 → 월드클래스 리그)
-        divs = [r["div"] for rs in rows.values() for r in rs if r["s"] == str(k) and r["div"]]
-        name = re.sub(r"\d+$", "", max(set(divs), key=divs.count)) if divs else ""
-        return f"{name} 리그".strip() + f" ({mdate(span[k][0])})"
+    def league_name(n, k):
+        """리그는 전 시즌 마감 등급으로 정해짐 (사용자 확인) : 챌린저 이상 → 레전더리 리그, 월드클래스와 마스터 → 월드클래스 리그, 프로 이하 → 프로 리그"""
+        mine = [r for r in rows[n] if r["s"] == str(k)]
+        start = min(r["d"] for r in mine)
+        now = next((m for m in main if span[m][0] <= start <= span[m][1]), None)
+        prev = max((m for m in main if now and span[m][1] < span[now][0]), key=lambda m: span[m][1], default=None)
+        last = next((r["dv"] for r in rows[n] if r["s"] == str(prev) and r["dv"]), None)  # 행은 최신순이라 첫 값이 마감 등급
+        name = "리그" if not last else "레전더리 리그" if last <= 1300 else "월드클래스 리그" if last <= 2200 else "프로 리그"
+        return f"{name} ({mdate(start)})"
 
-    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): league_name(k) for k in side} | {"전체": "시즌 구분 전"}
+    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): f"리그 ({mdate(span[k][0])})" for k in side} | {"전체": "시즌 구분 전"}
     seasons = [str(k) for k in main] + [str(k) for k in sorted(side, key=lambda k: span[k][0], reverse=True)] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None
@@ -363,6 +368,7 @@ def write_official():
             by.setdefault(r["s"], []).append(r)
         out[n]["sum"] = {str(k): summary(n, k, v) for k, v in by.items() if k}
         out[n]["rows"] = by.get(cur, [])
+        out[n]["labels"] = {str(k): league_name(n, k) for k in side if str(k) in by}
     write("official.json", {"pending": PENDING[0], "current": cur, "order": seasons, "labels": labels, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
     for i, season in enumerate(seasons[1:], 1):
         write(f"official_{i}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
