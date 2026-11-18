@@ -289,10 +289,15 @@ details.mt summary { display: grid; grid-template-columns: 22px auto minmax(0, 1
 details.mt summary .num { font-size: 18px; }
 details.mt summary::after { content: "골 보기"; color: var(--faint); font-size: 12px; }
 details.mt[open] summary::after { content: "접기"; }
-details.mt ol { padding: 0 0 10px 32px; }
-details.mt ol li { padding: 3px 0; color: var(--flat); font-size: 13px; }
-details.mt ol li::before { content: none; }
-details.mt ol .num { color: var(--muted); display: inline-block; min-width: 30px; }
+.gsides { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); padding: 2px 0 12px; }
+.gsides > div { padding: 7px 0; border-top: 1px solid var(--line); min-width: 0; }
+.gsides .hd { border-top: 0; padding: 4px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.gsides .hd .num { color: var(--ink); font-size: 18px; margin: 0 8px; }
+.gs.l { text-align: right; } .gs.r { text-align: left; }
+.gs b { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs small { display: block; margin-top: 1px; font-size: 12px; color: var(--muted); }
+.gs small.as { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gt-t { text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; padding-top: 9px !important; }
 .gw { color: var(--muted); }
 details.mt.off summary { grid-template-columns: 22px auto minmax(0, 1fr) auto auto; }
 details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
@@ -754,6 +759,13 @@ const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
 const FAR = 18;  // 중거리 기준 : 골문 중앙에서 18m 이상 (사용자 기준, 박스 안팎 무관)
 const goalLine = (g, who) => { const d = dist(g);
   return `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')}${who ? ` <span class="gw">(${esc(who)})</span>` : ''}, ${shotName(g.t)}${d != null ? `, 약 ${Math.round(d)}m${d >= FAR ? ' 중거리' : ''}` : ''}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`; };
+function goalSides(goals, a, b, ga, gb) {
+  const d = g => { const m = dist(g); return [shotName(g.t), m != null ? `${Math.round(m)}m${m >= FAR ? ' 중거리' : ''}` : ''].filter(Boolean).join(', '); };
+  const cell = (g, side) => `<div class="gs ${side}"><b>${esc(g.n || '알 수 없음')}</b><small>${d(g)}</small>${g.an ? `<small class="as">도움 ${esc(g.an)}</small>` : ''}</div>`;
+  return `<div class="gsides"><div class="gs l hd">${esc(a)}<span class="num">${ga ?? '-'}</span></div><div class="gt-t hd"></div><div class="gs r hd"><span class="num">${gb ?? '-'}</span>${esc(b)}</div>
+    ${goals.map(g => `${g.who === a ? cell(g, 'l') : '<div></div>'}<div class="gt-t num">${g.m}'</div>${g.who === b ? cell(g, 'r') : '<div></div>'}`).join('')
+      || '<div></div><div class="gt-t">골 없음</div><div></div>'}</div>`;
+}
 function goalKinds(goals) {  // 종류별 수, 중거리(18m 이상), 도움 없음, 위치를 아는 골 수
   const kinds = {}; let out = 0, solo = 0, known = 0;
   goals.forEach(g => { const n = shotName(g.t); kinds[n] = (kinds[n] || 0) + 1; if (!g.a) solo++; if (g.x) { known++; if (dist(g) >= FAR) out++; } });
@@ -840,7 +852,7 @@ function viewDuel(H, i, j) {
       const goals = [...me.goals.map(g => ({ ...g, who: A })), ...op.goals.map(g => ({ ...g, who: B }))].sort((x, y) => x.m - y.m);
       const pk = me.pk || op.pk ? `<span class="tag">승부차기 ${me.pk} : ${op.pk}</span>` : '', forf = me.end === 1 ? '<span class="tag">몰수승</span>' : me.end === 2 ? '<span class="tag">몰수패</span>' : '';
       return `<details class="mt"><summary>${chip(me.res)}<span class="num">${me.goal ?? '-'} : ${op.goal ?? '-'}</span><time>${mdate(m.date)}${pk}${forf}</time></summary>
-        <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
+        ${goalSides(goals, A, B, me.goal, op.goal)}</details>`;
     }).join('')}</section>
     ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
     <p class="note">골 종류는 넥슨이 슛마다 남기는 종류 기록이고, 비율은 그 사람 골 전체 대비임(중거리는 위치를 아는 골 대비). 이름이 없는 종류 번호는 기타 슛으로 묶음.</p>`
@@ -880,7 +892,7 @@ function viewOfficial(i, season) {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
       const tags = `${r.pk[0] || r.pk[1] ? `<span class="tag">승부차기 ${r.pk[0]} : ${r.pk[1]}</span>` : ''}${r.e === 1 ? '<span class="tag">몰수승</span>' : r.e === 2 ? '<span class="tag">몰수패</span>' : ''}`;
       return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${tags}</span><time>${mdate(r.d)}</time></summary>
-        <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
+        ${goalSides(goals, o.nick, r.op, r.g, r.og)}</details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
     <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
