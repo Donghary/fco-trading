@@ -344,9 +344,9 @@ def write_official():
         prev = max((m for m in main if now and span[m][1] < span[now][0]), key=lambda m: span[m][1], default=None)
         last = next((r["dv"] for r in rows[n] if r["s"] == str(prev) and r["dv"]), None)  # 행은 최신순이라 첫 값이 마감 등급
         name = "리그" if not last else "레전더리 리그" if last <= 1300 else "월드클래스 리그" if last <= 2200 else "프로 리그"
-        return f"{name} ({mdate(start)})"
+        return name  # 날짜는 화면에서 시즌 줄 아래에 붙임
 
-    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): f"리그 ({mdate(span[k][0])})" for k in side} | {"전체": "시즌 구분 전"}
+    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): "리그" for k in side} | {"전체": "시즌 구분 전"}
     seasons = [str(k) for k in main] + [str(k) for k in sorted(side, key=lambda k: span[k][0], reverse=True)] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None

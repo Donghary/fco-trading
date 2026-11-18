@@ -248,6 +248,8 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .of .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .of time, .mt time { color: var(--muted); font: 600 13px var(--num); white-space: nowrap; }
 .ofform { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.ofform > span:not(.form) { white-space: nowrap; }  /* 승무패가 중간에서 끊기지 않게 줄 단위로만 넘김 */
+.srec { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 /* 상대전적 */
 .lg { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 64px; gap: 2px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -332,6 +334,9 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
   .q-name { grid-area: name; } .q-sub { grid-area: sub; align-self: start; } .q-val { grid-area: val; } .q-chg { grid-area: chg; }
   .q-line { grid-area: line; margin: 0; height: 46px; }
   .q-err { grid-column: 1 / -1; }
+}
+@media (max-width: 400px) {
+  .gt { grid-template-columns: minmax(0, 1fr) 84px 84px; }
 }
 @media (max-width: 359px) {
   .p-d { grid-template-columns: 40px 1fr 60px 74px; font-size: 14px; }
@@ -870,7 +875,7 @@ function viewOfficial(i, season) {
   const rows = isCur ? mine.rows : past?.owners?.[o.nick] || [], sum = mine.sum[s];
   const rank = k => (O.order || []).indexOf(k), seasons = Object.entries(mine.sum).sort((x, y) => rank(x[0]) - rank(y[0]));  // 지금 시즌, 지난 시즌, 다른 모드 순
   const list = seasons.length > 1 || !isCur ? `<section><h2>시즌</h2><div class="gt"><span class="h">시즌</span><span class="h n">경기</span><span class="h n">승률</span>
-    ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(mine.labels?.[k] || O.labels?.[k] || k)}${k === O.current ? ' (지금)' : ''}<span class="gw"> ${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</span></a>
+    ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(mine.labels?.[k] || O.labels?.[k] || k)}${k === O.current ? ' (지금)' : ''}<small class="srec">${String(mine.labels?.[k] || O.labels?.[k]).includes('리그') ? mdate(v.first).split(' ')[0] + ', ' : ''}${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</small></a>
       <span class="n num">${v.w + v.d + v.l}</span><span class="n num">${pct([v.w, v.d, v.l])}%</span>`).join('')}</div></section>` : '';
   if (!rows.length) return head + (!isCur && !past ? '<div class="skel"></div>' : `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`) + list;
   const t = sum ? [sum.w, sum.d, sum.l] : tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
