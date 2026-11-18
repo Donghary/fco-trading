@@ -115,9 +115,9 @@ def match_rec(d, by_ouid):
                  for g in x.get("shootDetail") or [] if g.get("result") == 3]
         return {"nick": by_ouid.get(x["ouid"], x.get("nickname", "")), "own": x["ouid"] in by_ouid, "res": md.get("matchResult"),
                 "end": md.get("matchEndType"), "goal": sh.get("goalTotal"), "pk": sh.get("shootOutScore"), "poss": md.get("possession"),
-                "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"), "goals": goals}
-    season = next(((x.get("matchDetail") or {}).get("seasonId") for x in d.get("matchInfo", [])), None)
-    return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "season": season, "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
+                "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"),
+                "season": md.get("seasonId"), "goals": goals}  # 시즌 번호는 사람마다 다를 수 있어 각자 것을 씀
+    return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
 
 
 def refresh_matches():
@@ -150,7 +150,7 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and "season" not in r)  # 골 위치나 시즌 번호가 없는 예전 기록
+    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p for p in r["p"]))  # 골 위치나 각자의 시즌 번호가 없는 예전 기록
     stale = [m for m, r in cache.items() if old(r)]
     missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
     todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
@@ -292,7 +292,7 @@ def official_rows(nick, ids, goals=False):
         if not me:
             continue
         op = r["p"][1] if r["p"][0] is me else r["p"][0]
-        row = {"d": r["date"], "s": r.get("season"), "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
+        row = {"d": r["date"], "s": me.get("season"), "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
                "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")}
         if goals:
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
@@ -311,7 +311,8 @@ def write_official():
     """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
     rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
     seasons = sorted({r["s"] for rs in rows.values() for r in rs if r["s"]}, reverse=True)
-    cur = seasons[0] if seasons else None
+    latest = [next((r["s"] for r in rs if r["s"]), None) for rs in rows.values()]  # 각자 가장 최근 경기의 시즌
+    cur = max((x for x in latest if x), default=None)
     base = baselines().get("official", {})
 
     def summary(n, season, rs):
