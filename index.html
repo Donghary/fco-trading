@@ -279,6 +279,8 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .gt .h { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gt .n { text-align: right; font-size: 17px; }
 .gt .n.z { color: var(--faint); }
+.gt .n.bar { background: linear-gradient(var(--muted), var(--muted)) right bottom / var(--w) 2px no-repeat; }
+.gt .n small { display: inline-block; min-width: 34px; margin-left: 6px; font: 600 12px var(--num); color: var(--muted); text-align: right; }
 .scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 .scorers h3 { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 0 2px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scorers li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -743,9 +745,11 @@ const chip = r => `<span class="rc ${r === '승' ? 'w' : r === '패' ? 'l' : 'd'
 const mdate = d => { const k = new Date(Date.parse(d + 'Z') + 9 * 3600e3); return `${k.getUTCMonth() + 1}.${two(k.getUTCDate())} ${two(k.getUTCHours())}:${two(k.getUTCMinutes())}`; };
 const tally = rs => rs.reduce((a, r) => (a[r === '승' ? 0 : r === '패' ? 2 : 1]++, a), [0, 0, 0]);
 const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
-// 슈팅 종류 : 3 헤더, 8 프리킥, 9 페널티킥은 경기 요약 숫자와 대조해 확인함. 나머지는 넥슨 번호표 기준, 이름이 없는 번호는 기타
-const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '칩슛', 5: '플레어', 6: '낮은 슛', 7: '발리', 8: '프리킥', 9: '페널티킥', 10: '무회전', 11: '바이시클' };
+// 슈팅 종류 : 넥슨이 슛마다 기록하는 종류 번호. 1, 2, 3, 6, 7, 8, 9 는 fcgg 집계(456화이팅 최근 25경기)와 숫자가 모두 일치해 확인함.
+// 4, 5, 10, 11 은 넥슨 번호표 기준, 이름이 없는 번호(12, 13)는 기타
+const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '로빙슛', 5: '플레어', 6: '낮은 슛', 7: '발리슛', 8: '프리킥', 9: '페널티킥', 10: '무회전슛', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
+const share = (v, t) => { const r = t ? Math.round(v / t * 100) : 0; return `<span class="n num bar ${v ? '' : 'z'}" style="--w:${r}%">${v}<small>${r}%</small></span>`; };
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
 const FAR = 18;  // 중거리 기준 : 골문 중앙에서 18m 이상 (사용자 기준, 박스 안팎 무관)
@@ -825,10 +829,11 @@ function viewDuel(H, i, j) {
       <div><dt>평균 점유율</dt><dd class="num">${Math.round(st.poss / st.n)}%</dd></div><div><dt>슈팅</dt><dd class="num">${st.sh[0]} : ${st.sh[1]}</dd></div>
       <div><dt>유효슈팅</dt><dd class="num">${st.sot[0]} : ${st.sot[1]}</dd></div><div><dt>몰수 경기</dt><dd class="num">${st.forf}</dd></div></dl>
     ${types.length ? `<section><h2>골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">${esc(A)}</span><span class="h n">${esc(B)}</span>
-      ${types.map(([k, [x, y]]) => `<span>${k}</span><span class="n num ${x ? '' : 'z'}">${x}</span><span class="n num ${y ? '' : 'z'}">${y}</span>`).join('')}
+      ${(() => { const tot = [0, 1].map(i => types.reduce((a, [, v]) => a + v[i], 0)); return types.map(([k, [x, y]]) => `<span>${k}</span>${share(x, tot[0])}${share(y, tot[1])}`).join(''); })()}
       ${(() => { const ka = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === A).goals)), kb = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === B).goals));
-        return `${ka.known + kb.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${ka.out}</span><span class="n num">${kb.out}</span>` : ''}
-          <span class="sub">도움 없는 골</span><span class="n num">${ka.solo}</span><span class="n num">${kb.solo}</span>`; })()}</div>
+        const ga = Object.values(ka.kinds).reduce((a, b) => a + b, 0), gb = Object.values(kb.kinds).reduce((a, b) => a + b, 0);
+        return `${ka.known + kb.known ? `<span class="sub">중거리 골 (18m 이상)</span>${share(ka.out, ka.known)}${share(kb.out, kb.known)}` : ''}
+          <span class="sub">도움 없는 골</span>${share(ka.solo, ga)}${share(kb.solo, gb)}`; })()}</div>
       ${ms.some(m => m.p.some(p => p.goals.some(g => !g.x && g))) ? '<p class="note">중거리 골은 골 위치를 받은 경기만 셈. 예전 경기는 위치를 다시 받는 중</p>' : ''}</section>` : ''}
     <section><h2>최다 득점 선수</h2><div class="scorers">${[0, 1].map(side => `<div><h3>${esc(side ? B : A)}</h3><ol>${top(side).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('') || '<li><span>골 없음</span></li>'}</ol></div>`).join('')}</div></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
@@ -839,7 +844,7 @@ function viewDuel(H, i, j) {
         <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
     }).join('')}</section>
     ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">골 종류에서 헤더, 프리킥, 페널티킥은 확인한 분류이고, 나머지는 넥슨이 공개한 번호표를 따름. 이름이 없는 번호는 기타 슛으로 묶음.</p>`
+    <p class="note">골 종류는 넥슨이 슛마다 남기는 종류 기록이고, 비율은 그 사람 골 전체 대비임(중거리는 위치를 아는 골 대비). 이름이 없는 종류 번호는 기타 슛으로 묶음.</p>`
     : '<p class="note">이 두 사람이 붙은 기록이 아직 없음</p>'}`;
 }
 
@@ -867,9 +872,10 @@ function viewOfficial(i, season) {
       <div><dt>득실 (받은 경기)</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
     ${list}
     <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
-      ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${Math.round(c / gf * 100)}%</span>`).join('')}
-      ${k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}
-      <span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num">${gf ? Math.round(k.solo / gf * 100) : 0}%</span></div></section>
+      ${(() => { const all = Object.values(k.kinds).reduce((a, b) => a + b, 0), pc = (v, t) => t ? Math.round(v / t * 100) : 0;
+        return Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num bar" style="--w:${pc(c, all)}%">${pc(c, all)}%</span>`).join('')
+        + (k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num bar" style="--w:${pc(k.out, k.known)}%">${pc(k.out, k.known)}%</span>` : '')
+        + `<span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num bar" style="--w:${pc(k.solo, all)}%">${pc(k.solo, all)}%</span>`; })()}</div></section>
     <section><h2>최다 득점 선수</h2><ol class="scorers" style="display:block">${Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('')}</ol></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
