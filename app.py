@@ -150,7 +150,7 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p for p in r["p"]))  # 골 위치나 각자의 시즌 번호가 없는 예전 기록
+    old = lambda r: r.get("v") != 2  # 골 위치가 없는 예전 기록
     stale = [m for m, r in cache.items() if old(r)]
     missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
     todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
@@ -309,10 +309,17 @@ def baselines():
 
 def write_official():
     """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
+    # 넥슨의 seasonId 는 같은 사람도 경기마다 오락가락해서(예 : 같은 날 202606, 202611) 시즌 구분에 쓰지 않음.
+    # 시즌은 baselines.json 의 seasons 에 적은 시작일로 나눔. 없으면 전부 "전체" 한 묶음
+    starts = sorted(baselines().get("seasons", []), key=lambda x: x["start"])
+    season_of = lambda d: next((x["name"] for x in reversed(starts) if d[:10] >= x["start"]), "이전" if starts else "전체")
     rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
-    seasons = sorted({r["s"] for rs in rows.values() for r in rs if r["s"]}, reverse=True)
-    latest = [next((r["s"] for r in rs if r["s"]), None) for rs in rows.values()]  # 각자 가장 최근 경기의 시즌
-    cur = max((x for x in latest if x), default=None)
+    for rs in rows.values():
+        for r in rs:
+            r["s"] = season_of(r["d"])
+    seasons = [x["name"] for x in reversed(starts)] + ["이전" if starts else "전체"]
+    seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
+    cur = seasons[0] if seasons else None
     base = baselines().get("official", {})
 
     def summary(n, season, rs):
@@ -328,12 +335,12 @@ def write_official():
     for n, rs in rows.items():
         by = {}
         for r in rs:
-            by.setdefault(r["s"] or cur, []).append(r)  # 시즌 번호가 아직 없는 경기는 지금 시즌으로 봄
+            by.setdefault(r["s"], []).append(r)
         out[n]["sum"] = {str(k): summary(n, k, v) for k, v in by.items() if k}
         out[n]["rows"] = by.get(cur, [])
-    write("official.json", {"pending": PENDING[0], "current": str(cur) if cur else None, "owners": out})
-    for season in seasons[1:]:
-        write(f"official_{season}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
+    write("official.json", {"pending": PENDING[0], "current": cur, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
+    for i, season in enumerate(seasons[1:], 1):
+        write(f"official_{i}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
 
 
 def official_of(nick, s):
