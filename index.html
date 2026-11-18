@@ -756,6 +756,14 @@ function goalKinds(goals) {  // 종류별 수, 중거리(18m 이상), 도움 없
   return { kinds, out, solo, known };
 }
 
+function baseFor(H, a, b) {  // 게임 안 기록 출발점, a 기준으로 뒤집어 줌
+  const x = H.base?.[`${a}|${b}`], y = H.base?.[`${b}|${a}`];
+  return x ? x : y ? { w: y.l, d: y.d, l: y.w, asof: y.asof } : null;
+}
+function record(ms, a, b, base) {  // 승무패 : 출발점이 있으면 그 시각 뒤 경기만 더함
+  const t = tally(ms.filter(m => !base || m.date > base.asof).map(m => m.p.find(p => p.nick === a).res));
+  return base ? [t[0] + base.w, t[1] + base.d, t[2] + base.l] : t;
+}
 function duel(ms, a, b) {  // a 기준 기록
   const st = { n: 0, res: [], gf: 0, ga: 0, forf: 0, poss: 0, sh: [0, 0], sot: [0, 0], types: {}, sc: [{}, {}] };
   for (const m of ms) {
@@ -779,8 +787,11 @@ function viewH2H(a, b) {
   const since = ms.length ? mdate(ms.at(-1).date).split(' ')[0] : '';
   const table = order.map(o => {
     const mine = ms.filter(m => m.p.some(p => p.nick === o.nick)), st = { res: [], gf: 0, ga: 0 };
-    mine.forEach(m => { const me = m.p.find(p => p.nick === o.nick), op = m.p.find(p => p !== me); st.res.push(me.res); st.gf += me.goal || 0; st.ga += op.goal || 0; });
-    return { o, st, t: tally(st.res) };
+    mine.forEach(m => { const me = m.p.find(p => p.nick === o.nick), op = m.p.find(p => p !== me); st.gf += me.goal || 0; st.ga += op.goal || 0; });
+    const t = order.filter(x => x !== o).map(x => record(mine.filter(m => m.p.some(p => p.nick === x.nick)), o.nick, x.nick, baseFor(H, o.nick, x.nick)))
+      .reduce((a, r) => [a[0] + r[0], a[1] + r[1], a[2] + r[2]], [0, 0, 0]);
+    st.res = { length: t[0] + t[1] + t[2] };
+    return { o, st, t };
   }).sort((x, y) => pct(y.t) - pct(x.t) || y.st.res.length - x.st.res.length);
   const pairs = [];
   order.forEach((x, i) => order.slice(i + 1).forEach(y => pairs.push([x, y])));
@@ -789,10 +800,10 @@ function viewH2H(a, b) {
       <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></li>`).join('')}</ol>
     <div class="bar"><h2>상대별 전적</h2></div>
     <ol class="rows">${pairs.map(([x, y]) => {
-      const st = duel(ms.filter(m => m.p.some(p => p.nick === x.nick) && m.p.some(p => p.nick === y.nick)), x.nick, y.nick), t = tally(st.res), n = st.n || 1;
+      const pm = ms.filter(m => m.p.some(p => p.nick === x.nick) && m.p.some(p => p.nick === y.nick)), st = duel(pm, x.nick, y.nick), t = record(pm, x.nick, y.nick, baseFor(H, x.nick, y.nick));
       return `<li><a class="pair" href="#/h2h/${x.i}/${y.i}"><span class="pa">${esc(x.nick)}</span><span class="ps num">${t[0]} : ${t[2]}<small>승률 ${pct(t)} : ${pct([t[2], t[1], t[0]])}%</small></span><span class="pb">${esc(y.nick)}</span>
         <span class="pbar" aria-hidden="true"><b style="flex:${t[0]}"></b><b style="flex:${t[1]}"></b><b style="flex:${t[2]}"></b></span>
-        <span class="pm"><span>${st.n}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
+        <span class="pm"><span>${t[0] + t[1] + t[2]}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
     }).join('')}</ol>
     <p class="note">넥슨이 주는 경기 기록은 최근 30일뿐이라 ${since}부터 쌓기 시작함. 새 경기는 1시간마다 더해지고, 게임 안 통산 전적과는 다를 수 있음.${H.pending ? ` 아직 받는 중인 경기 ${H.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
@@ -800,7 +811,7 @@ function viewH2H(a, b) {
 function viewDuel(H, i, j) {
   const A = S.owners[i]?.nick, B = S.owners[j]?.nick;
   if (!A || !B || i === j) return notFound('없는 대전');
-  const ms = H.matches.filter(m => m.p.some(p => p.nick === A) && m.p.some(p => p.nick === B)), st = duel(ms, A, B), t = tally(st.res);
+  const ms = H.matches.filter(m => m.p.some(p => p.nick === A) && m.p.some(p => p.nick === B)), st = duel(ms, A, B), base = baseFor(H, A, B), t = record(ms, A, B, base);
   const merged = {};
   Object.entries(st.types).forEach(([k, [x, y]]) => { const n = shotName(+k), m = merged[n] ??= [0, 0]; m[0] += x; m[1] += y; });
   const types = Object.entries(merged).sort((x, y) => y[1][0] + y[1][1] - x[1][0] - x[1][1]);
@@ -808,7 +819,7 @@ function viewDuel(H, i, j) {
   const show = ui.more ? ms : ms.slice(0, 15);
   return `<div class="head"><a class="btn" href="#/h2h" aria-label="상대전적으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(A)} vs ${esc(B)}</b></h1></div>
     ${st.n ? `<div class="quote duel"><div class="big num">${wdl(t)}</div>
-      <div class="ofform"><span>${esc(A)} 기준, ${st.n}경기, 승률 ${pct(t)}%</span>${form(st.res)}<a class="btn quiet" href="#/h2h/${j}/${i}">기준 바꾸기</a></div></div>
+      <div class="ofform"><span>${esc(A)} 기준, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${base ? `, 게임 안 기록(${mdate(base.asof)}까지) 포함` : ''}</span>${form(st.res)}<a class="btn quiet" href="#/h2h/${j}/${i}">기준 바꾸기</a></div></div>
     <dl class="kv"><div><dt>득실</dt><dd class="num">${st.gf} : ${st.ga}</dd></div><div><dt>경기당 득점</dt><dd class="num">${(st.gf / st.n).toFixed(1)} : ${(st.ga / st.n).toFixed(1)}</dd></div>
       <div><dt>평균 점유율</dt><dd class="num">${Math.round(st.poss / st.n)}%</dd></div><div><dt>슈팅</dt><dd class="num">${st.sh[0]} : ${st.sh[1]}</dd></div>
       <div><dt>유효슈팅</dt><dd class="num">${st.sot[0]} : ${st.sot[1]}</dd></div><div><dt>몰수 경기</dt><dd class="num">${st.forf}</dd></div></dl>
@@ -832,25 +843,28 @@ function viewDuel(H, i, j) {
 }
 
 // ---------- 공식경기 전체 기록 ----------
-function viewOfficial(i) {
+function viewOfficial(i, season) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
   const O = file('official.json'), head = `<div class="head"><a class="btn" href="#/o/${i}" aria-label="${esc(o.nick)} 화면으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)} 공식경기</b></h1></div>`;
   if (!O) return head + (files['official.json']?.err ? '<p class="note">기록을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div><div class="skel"></div>');
-  const rows = O.owners[o.nick] || [];
-  if (!rows.length) return head + `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`;
-  const t = tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
+  const mine = O.owners[o.nick] || { sum: {}, rows: [] }, s = season || O.current, isCur = String(s) === String(O.current);
+  const past = isCur ? null : file(`official_${s}.json`);
+  const rows = isCur ? mine.rows : past?.owners?.[o.nick] || [], sum = mine.sum[s];
+  const seasons = Object.entries(mine.sum).sort((x, y) => y[0].localeCompare(x[0]));
+  const list = seasons.length > 1 || !isCur ? `<section><h2>시즌</h2><div class="gt"><span class="h">시즌 번호</span><span class="h n">경기</span><span class="h n">승률</span>
+    ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${k}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(k)}${k === O.current ? ' (지금)' : ''}<span class="gw"> ${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</span></a>
+      <span class="n num">${v.w + v.d + v.l}</span><span class="n num">${pct([v.w, v.d, v.l])}%</span>`).join('')}</div></section>` : '';
+  if (!rows.length) return head + (!isCur && !past ? '<div class="skel"></div>' : `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`) + list;
+  const t = sum ? [sum.w, sum.d, sum.l] : tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
   const k = goalKinds(rows.flatMap(r => r.mg)), sc = {};
   rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
   const first = rows.at(-1), show = ui.more ? rows : rows.slice(0, 20);
   return head + `<div class="quote duel"><div class="big num">${wdl(t)}</div>
-      <div class="ofform"><span>${rows.length}경기, 승률 ${pct(t)}%, ${mdate(first.d).split(' ')[0]}부터</span>${form(rows.map(r => r.r))}</div></div>
-    <dl class="kv"><div><dt>현재 티어</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>기간 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
-      <div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
-    ${(() => { const by = {}; rows.forEach(r => (by[r.s ?? '확인 중'] ??= []).push(r.r));
-      return `<section><h2>시즌별</h2><div class="gt"><span class="h">시즌 번호</span><span class="h n">경기</span><span class="h n">승률</span>
-        ${Object.entries(by).sort((a, b) => String(b[0]).localeCompare(String(a[0]))).map(([k, rs]) => { const t = tally(rs);
-          return `<span>${k === '확인 중' ? '시즌 번호 받는 중' : esc(k)}<span class="gw"> ${t[0]}승 ${t[1]}무 ${t[2]}패</span></span><span class="n num">${rs.length}</span><span class="n num">${pct(t)}%</span>`; }).join('')}</div></section>`; })()}
+      <div class="ofform"><span>${s ? `시즌 ${esc(s)}${isCur ? '' : ' (지난 시즌)'}` : '시즌 번호 받는 중'}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
+    <dl class="kv"><div><dt>${isCur ? '현재 티어' : '마지막 티어'}</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>받은 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
+      <div><dt>득실 (받은 경기)</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
+    ${list}
     <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
       ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${Math.round(c / gf * 100)}%</span>`).join('')}
       ${k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}
@@ -863,7 +877,7 @@ function viewOfficial(i) {
         <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라 그 이후로 계속 쌓아 감. 티어는 경기마다 기록된 그 경기 당시 티어임.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+    <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
 
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
@@ -891,7 +905,7 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? (b === 'off' ? viewOfficial(+a) : viewOwner(+a)) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
+  $('#app').innerHTML = view === 'o' ? (b === 'off' ? viewOfficial(+a, c) : viewOwner(+a)) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
   document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h'].includes(view) ? view : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();

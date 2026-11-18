@@ -152,7 +152,8 @@ def refresh_matches():
     older = [m for ids in STATE["off"].values() for m in ids]
     old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and "season" not in r)  # 골 위치나 시즌 번호가 없는 예전 기록
     stale = [m for m, r in cache.items() if old(r)]
-    todo = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older + stale) if m not in cache or old(cache[m])]
+    missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
+    todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
     done = 0
     for m in todo[:MATCH_PER_RUN]:
         try:
@@ -163,9 +164,8 @@ def refresh_matches():
             if "429" in str(e):
                 break  # 한도에 걸리면 이번 실행은 여기까지
     left = todo[done:]
-    cut = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - VALUE_DAYS * 86400))
     keep = set(recent) | {m for ids in STATE["off"].values() for m in ids}
-    STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or (m in keep and r["date"] >= cut)}
+    STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or m in keep}
     STATE["off"] = {n: [m for m in ids if m in STATE["matches"] or m in left] for n, ids in STATE["off"].items()}
     STATE["queue"], STATE["seeded"], STATE["off_seeded"] = [m for m in left if m in h2h or m in STATE["queue"]], True, True
     PENDING[0] = len(left)
@@ -301,6 +301,40 @@ def official_rows(nick, ids, goals=False):
     return sorted(rows, key=lambda r: r["d"], reverse=True)
 
 
+def baselines():
+    """게임 안에서 확인한 누적 기록 (사용자가 알려준 값). asof 시각까지의 기록이고, 그 뒤 경기는 받은 기록으로 더함"""
+    f = ROOT / "baselines.json"
+    return json.loads(f.read_text()) if f.exists() else {}
+
+
+def write_official():
+    """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
+    rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
+    seasons = sorted({r["s"] for rs in rows.values() for r in rs if r["s"]}, reverse=True)
+    cur = seasons[0] if seasons else None
+    base = baselines().get("official", {})
+
+    def summary(n, season, rs):
+        b = base.get(n, {}).get(str(season))
+        after = [r for r in rs if not b or r["d"] > b["asof"]]
+        w, d, l = (sum(r["r"] == x for r in after) for x in ("승", "무", "패"))
+        if b:
+            w, d, l = w + b["w"], d + b["d"], l + b["l"]
+        return {"got": len(rs), "w": w, "d": d, "l": l, "gf": sum(r["g"] or 0 for r in rs), "ga": sum(r["og"] or 0 for r in rs),
+                "first": rs[-1]["d"], "last": rs[0]["d"], "div0": rs[-1]["div"], "div": rs[0]["div"], "base": b}
+
+    out = {n: {"sum": {}, "rows": []} for n in OWNERS}
+    for n, rs in rows.items():
+        by = {}
+        for r in rs:
+            by.setdefault(r["s"] or cur, []).append(r)  # 시즌 번호가 아직 없는 경기는 지금 시즌으로 봄
+        out[n]["sum"] = {str(k): summary(n, k, v) for k, v in by.items() if k}
+        out[n]["rows"] = by.get(cur, [])
+    write("official.json", {"pending": PENDING[0], "current": str(cur) if cur else None, "owners": out})
+    for season in seasons[1:]:
+        write(f"official_{season}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
+
+
 def official_of(nick, s):
     """구단주의 최근 공식경기 요약 : 경기별 결과와 가장 최근 경기의 등급"""
     rows = []
@@ -391,10 +425,10 @@ def build():
         "lock": (ROOT / "lock.json").exists(),  # 친구용 편집 비밀번호가 정해졌는지
     })
     write("values.json", STATE["value"])
-    write("official.json", {"pending": PENDING[0], "owners": {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}})
+    write_official()
     own = set(OWNERS)
     named = lambda g: {**g, "n": NAMES.get(g["sp"], ""), "an": NAMES.get(g["a"], "") if g["a"] else ""}
-    write("h2h.json", {"pending": PENDING[0], "matches": sorted(({"id": m, "date": r["date"], "p": [{**p, "goals": [named(g) for g in p["goals"]]} for p in r["p"]]}
+    write("h2h.json", {"pending": PENDING[0], "base": baselines().get("h2h", {}), "matches": sorted(({"id": m, "date": r["date"], "p": [{**p, "goals": [named(g) for g in p["goals"]]} for p in r["p"]]}
                                           for m, r in STATE["matches"].items()
                                           if r.get("type") == 40 and len(r["p"]) == 2 and all(p["nick"] in own for p in r["p"])),
                                          key=lambda m: m["date"], reverse=True)})
