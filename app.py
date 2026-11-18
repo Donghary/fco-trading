@@ -29,10 +29,10 @@ SITE = ROOT / "site"
 OWNERS = ["456화이팅", "우끼끼하하", "게임좀그만해라", "이게임초보인데"]
 REPO = os.environ.get("GITHUB_REPOSITORY", "Donghary/fco-trading")  # 관심선수 저장 위치
 REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 .github/workflows/update.yml
-SQUAD_MIN = 120  # 명단과 경기 목록 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
+SQUAD_MIN = 55  # 명단과 경기 목록 갱신 주기(분). 서비스 단계 키라 매 실행(1시간)마다 확인
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
-MATCH_PER_RUN = 25  # 한 번에 받을 경기 상세 수. 하루 한도에 걸리면 그 실행은 멈추고 다음 날 이어 받음
+MATCH_PER_RUN = 600  # 한 번에 받을 경기 상세 수. 한도에 걸리면 그 실행은 멈추고 다음 실행에서 이어 받음
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
@@ -69,7 +69,7 @@ DIVISIONS = {d["divisionId"]: d["divisionName"] for d in meta("division")}
 # ---------- 넥슨 오픈 API : 구단 명단 ----------
 
 def nexon(path, **q):
-    time.sleep(0.3)  # 연달아 부르면 초당 한도에 걸림(429). 일일 한도는 1,000건
+    time.sleep(0.05)  # 서비스 단계 키 : 초당 500건, 하루 2,000만 건
     url = f"https://open.api.nexon.com/fconline/v1/{path}?{urllib.parse.urlencode(q)}"
     try:
         return json.loads(get(url, headers={"x-nxopen-api-key": api_key()}))
@@ -150,7 +150,7 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    old = lambda r: r.get("v") != 2  # 골 위치가 없는 예전 기록
+    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p for p in r["p"]))  # 골 위치나 각자의 시즌 번호가 없는 예전 기록
     stale = [m for m, r in cache.items() if old(r)]
     missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
     todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
@@ -309,15 +309,24 @@ def baselines():
 
 def write_official():
     """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
-    # 넥슨의 seasonId 는 같은 사람도 경기마다 오락가락해서(예 : 같은 날 202606, 202611) 시즌 구분에 쓰지 않음.
-    # 시즌은 baselines.json 의 seasons 에 적은 시작일로 나눔. 없으면 전부 "전체" 한 묶음
-    starts = sorted(baselines().get("seasons", []), key=lambda x: x["start"])
-    season_of = lambda d: next((x["name"] for x in reversed(starts) if d[:10] >= x["start"]), "이전" if starts else "전체")
+    # 시즌 : 구단주 본인 쪽 seasonId 기준. 다른 번호의 기간 안에 끼어 잠깐 나오는 번호(예 : 202606 기간 중 하루 202611)는
+    # 같은 공식경기 코드로 오는 다른 모드로 보고 따로 묶음 (2026-11-18 사용자와 합의)
     rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
+    span = {}
     for rs in rows.values():
         for r in rs:
-            r["s"] = season_of(r["d"])
-    seasons = [x["name"] for x in reversed(starts)] + ["이전" if starts else "전체"]
+            if r["s"]:
+                lo, hi = span.get(r["s"], (r["d"], r["d"]))
+                span[r["s"]] = (min(lo, r["d"]), max(hi, r["d"]))
+    side = {k for k, (lo, hi) in span.items() if any(a < lo and hi < b for o, (a, b) in span.items() if o != k)}
+    main = sorted((k for k in span if k not in side), key=lambda k: span[k][1], reverse=True)
+    for rs in rows.values():
+        for r in rs:
+            if not r["s"]:  # 시즌 번호를 아직 못 받은 경기는 날짜로 추정
+                r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), main[0] if main else None)
+            r["s"] = str(r["s"]) if r["s"] else "전체"
+    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): f"다른 모드 추정 ({k})" for k in side} | {"전체": "시즌 구분 전"}
+    seasons = [str(k) for k in main] + [str(k) for k in sorted(side)] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None
     base = baselines().get("official", {})
@@ -338,7 +347,7 @@ def write_official():
             by.setdefault(r["s"], []).append(r)
         out[n]["sum"] = {str(k): summary(n, k, v) for k, v in by.items() if k}
         out[n]["rows"] = by.get(cur, [])
-    write("official.json", {"pending": PENDING[0], "current": cur, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
+    write("official.json", {"pending": PENDING[0], "current": cur, "labels": labels, "files": {x: i for i, x in enumerate(seasons[1:], 1)}, "owners": out})
     for i, season in enumerate(seasons[1:], 1):
         write(f"official_{i}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
 

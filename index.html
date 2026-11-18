@@ -853,7 +853,7 @@ function viewOfficial(i, season) {
   const rows = isCur ? mine.rows : past?.owners?.[o.nick] || [], sum = mine.sum[s];
   const seasons = Object.entries(mine.sum).sort((x, y) => y[0].localeCompare(x[0]));
   const list = seasons.length > 1 || !isCur ? `<section><h2>시즌</h2><div class="gt"><span class="h">시즌</span><span class="h n">경기</span><span class="h n">승률</span>
-    ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(k)}${k === O.current ? ' (지금)' : ''}<span class="gw"> ${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</span></a>
+    ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(O.labels?.[k] || k)}${k === O.current ? ' (지금)' : ''}<span class="gw"> ${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</span></a>
       <span class="n num">${v.w + v.d + v.l}</span><span class="n num">${pct([v.w, v.d, v.l])}%</span>`).join('')}</div></section>` : '';
   if (!rows.length) return head + (!isCur && !past ? '<div class="skel"></div>' : `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`) + list;
   const t = sum ? [sum.w, sum.d, sum.l] : tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
@@ -861,7 +861,7 @@ function viewOfficial(i, season) {
   rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
   const first = rows.at(-1), show = ui.more ? rows : rows.slice(0, 20);
   return head + `<div class="quote duel"><div class="big num">${wdl(t)}</div>
-      <div class="ofform"><span>${s === '전체' ? '시즌 구분 전' : `${esc(s)}${isCur ? '' : ' (지난 시즌)'}`}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
+      <div class="ofform"><span>${esc(O.labels?.[s] || s)}${isCur || s === '전체' || String(O.labels?.[s]).startsWith('다른') ? '' : ' (지난 시즌)'}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
     <dl class="kv"><div><dt>${isCur ? '현재 티어' : '마지막 티어'}</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>받은 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
       <div><dt>득실 (받은 경기)</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
     ${list}
