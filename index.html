@@ -156,7 +156,7 @@ a.p:hover { background: var(--panel); }
 .face { grid-area: face; width: 48px; height: 48px; object-fit: contain; object-position: bottom; background: var(--panel); border-radius: 8px; }
 .p-id { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .p-id b { font-weight: 700; font-size: 16px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.season { height: 18px; width: auto; flex: none; }
+.season { height: 20px; width: auto; flex: none; }  /* 강화 배지(.g) 높이와 같게 */
 .pos { color: var(--muted); font: 600 13px var(--num); flex: none; }
 .ovr-n { color: var(--flat); font-size: 16px; flex: none; }
 .p-now { grid-area: now; font-size: 22px; line-height: 1.2; text-align: right; }
@@ -454,7 +454,7 @@ const two = n => String(n).padStart(2, '0');
 const clock = t => { const d = new Date(t * 1000); return `${d.getMonth() + 1}.${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`; };
 const gradeBadge = g => `<span class="g g${g >= 11 ? 11 : g >= 8 ? 8 : g >= 5 ? 5 : g >= 2 ? 2 : 1}"><span class="sr">강화 </span>${g}</span>`;
 const face = p => `<img class="face" src="${CDN}playersAction/p${p.spid}.png" data-pid="${p.spid % 1000000}" alt="" width="48" height="48" loading="lazy">`;
-const ident = p => `${gradeBadge(p.grade)}${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="18">` : ''}<b>${esc(p.name)}</b>`;
+const ident = p => `${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="20">` : ''}${gradeBadge(p.grade)}<b>${esc(p.name)}</b>`;
 
 // ---------- 풀케미 오버롤 ----------
 // 받아온 능력치는 적응도 5 가 이미 반영된 값이고, 풀케미는 그 위에 따로 더함 (사용자 기준)
@@ -754,7 +754,7 @@ function viewWatch() {
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
     ${need ? '<p class="note">선수 목록을 불러오는 중</p>' : ui.q && !found.length ? '<p class="note">그 이름의 선수를 찾지 못함. 게임에 표시되는 한글 이름으로 다시 찾아보면 됨</p>' : ''}
     ${found.length ? `<div class="bar"><h2>검색 결과 ${found.length}건${found.length === 80 ? ' (더 있음. 이름을 더 길게 입력)' : ''}</h2></div><ol class="rows">${found.map((p, i) => `<li class="res">
-        <span class="p-id">${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="" height="18" loading="lazy">` : ''}<b>${esc(p.name)}</b><small>${esc(p.season)}</small></span>
+        <span class="p-id">${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="" height="20" loading="lazy">` : ''}<b>${esc(p.name)}</b><small>${esc(p.season)}</small></span>
         <select class="field" id="g${i}" aria-label="${esc(p.name)} 강화 단계">${[...Array(13).keys()].map(g => `<option value="${g + 1}">${g + 1}강</option>`).join('')}</select>
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
     <details class="perm" ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
