@@ -794,8 +794,9 @@ const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 4, 5, 10, 11 은 넥슨 번호표 기준, 이름이 없는 번호(12, 13)는 기타
 const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '로빙슛', 5: '플레어', 6: '낮은 슛', 7: '발리슛', 8: '프리킥', 9: '페널티킥', 10: '무회전슛', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
-// 명단 순서 : 공격(왼쪽→오른쪽) → 2선(LAM CAM RAM) → 중앙(LM~RM) → 3선(LDM CDM RDM) → 수비(왼쪽→오른쪽) → 키퍼, 후보는 뺌
-const LINE = ['LW', 'LF', 'LS', 'CF', 'ST', 'RS', 'RF', 'RW', 'LAM', 'CAM', 'RAM', 'LM', 'LCM', 'CM', 'RCM', 'RM', 'LDM', 'CDM', 'RDM',
+// 명단 순서 : 최전방(LS ST RS) → 그 뒤 공격(LW LF CF RF RW) → 2선(LAM CAM RAM) → 중앙(LM~RM) → 3선(LDM CDM RDM) → 수비 → 키퍼.
+// 줄마다 왼쪽부터, 후보는 뺌 (CF, LF, RF 는 ST 보다 뒤에 섬 : 사용자 확인)
+const LINE = ['LS', 'ST', 'RS', 'LW', 'LF', 'CF', 'RF', 'RW', 'LAM', 'CAM', 'RAM', 'LM', 'LCM', 'CM', 'RCM', 'RM', 'LDM', 'CDM', 'RDM',
   'LWB', 'LB', 'LCB', 'CB', 'SW', 'RCB', 'RB', 'RWB', 'GK'];
 const lineup = (lu, total, who) => { const xi = lu.filter(q => q[2] !== 'SUB').sort((a, b) => LINE.indexOf(a[2]) - LINE.indexOf(b[2])), xv = xi.reduce((a, q) => a + (q[3] || 0), 0);
   return `<div class="lu"><div class="lu-h"><span>${esc(who)} 선발 ${xi.length}명</span><span><span class="num">${full(xv)}</span><small> 후보 포함 ${compact(total).replace(/<[^>]+>/g, '')}</small></span></div>
