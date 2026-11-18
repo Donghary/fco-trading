@@ -8,3 +8,4 @@ worker/.dev.vars
 worker/.wrangler/
 worker/node_modules/
 worker/.cf_token
+worker/.gh_token

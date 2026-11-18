@@ -4,3 +4,8 @@ compatibility_date = "2026-10-01"
 
 [vars]
 ALLOW_ORIGIN = "https://donghary.github.io"
+REPO = "Donghary/fco-trading"
+
+# 매시 5분, 35분 : GitHub 에 갱신을 요청함 (넥슨 시세는 정각 무렵 바뀌고, 경기 기록과 명단은 30분마다 새로 확인)
+[triggers]
+crons = ["5,35 * * * *"]

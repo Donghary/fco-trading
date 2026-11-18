@@ -411,7 +411,7 @@ const LS = {
 };
 let S = null, NAMES = null, namesLoading = false, namesFailed = false;
 const detail = {};  // 선수 상세 캐시 : key → {at, data | error}
-const STALE = 65 * 60;  // 시세는 1시간마다 갱신됨. 이보다 오래되면 늦은 것
+const STALE = 40 * 60;  // 30분마다 갱신됨. 이보다 오래되면 늦은 것
 const ui = { edit: false, sort: 'now', range: {}, q: '', msg: '', busy: false };
 
 // ---------- 숫자 표기 ----------

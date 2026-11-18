@@ -41,7 +41,17 @@ async function club(env, nick) {
   };
 }
 
+// 매시 5분, 35분 : GitHub 저장소에 갱신을 요청 (repository_dispatch). GitHub 실행기를 기다리게 하지 않으려고 예약은 여기서 함
+async function refresh(env) {
+  const r = await fetch(`https://api.github.com/repos/${env.REPO}/dispatches`, {
+    method: 'POST', body: JSON.stringify({ event_type: 'refresh' }),
+    headers: { Authorization: `Bearer ${env.GH_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'fco-search-worker' },
+  });
+  if (r.status !== 204) throw new Error(`갱신 요청 실패 ${r.status} ${await r.text()}`);
+}
+
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(refresh(env)); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), origin = req.headers.get('Origin') || '';
     const cors = { 'Access-Control-Allow-Origin': origin === env.ALLOW_ORIGIN || origin.startsWith('http://127.0.0.1') ? origin : env.ALLOW_ORIGIN,

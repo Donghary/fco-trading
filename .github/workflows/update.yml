@@ -1,13 +1,11 @@
 name: 시세 갱신
 
 on:
+  repository_dispatch:
+    types: [refresh]  # 주 수단 : Cloudflare Worker 가 매시 5분, 35분에 요청 (worker/search.js 의 scheduled)
   schedule:
-    - cron: "5 * * * *"  # 보조 수단. GitHub 가 예약을 거의 돌려주지 않아 아래 next 작업이 주 수단임
+    - cron: "5 * * * *"  # 보조 수단. GitHub 예약은 자주 밀리거나 건너뜀
   workflow_dispatch:
-    inputs:
-      delay:
-        description: 다음 실행까지 기다릴 초 (시험용. 비우면 다음 정시 5분)
-        required: false
   push:
     branches: [main]
 
@@ -15,14 +13,14 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  actions: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    concurrency:
-      group: pages
-      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -36,20 +34,3 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
-
-  # 실행될 때마다 다음 정시 5분에 이 워크플로를 다시 걸어 둠 (넥슨 시세는 정각 무렵 바뀜).
-  # 같은 묶음은 하나만 돌고 하나만 기다리므로, 저장(push)으로 실행이 늘어도 예약 사슬은 하나로 유지됨
-  next:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: next
-      cancel-in-progress: false
-    steps:
-      - run: |
-          wait=$(( (3900 - $(date +%s) % 3600) % 3600 ))
-          [ "$wait" -lt 240 ] && wait=$((wait + 3600))
-          sleep "${DELAY:-$wait}"
-          gh workflow run update.yml --repo "$GITHUB_REPOSITORY" --ref main
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DELAY: ${{ inputs.delay }}
