@@ -318,6 +318,13 @@ details.mt[open] summary::after { content: "접기"; }
 .gs small.as { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gt-t { text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; padding-top: 9px !important; }
 .gw { color: var(--muted); }
+.op .ov { margin-left: 8px; color: var(--muted); font-size: 14px; }
+.lu { padding: 0 0 12px; }
+.lu-h { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.lu-h .num { color: var(--ink); font-size: 16px; }
+.lu li { display: grid; grid-template-columns: 34px 30px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px 0; font-size: 13px; }
+.lu-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu li .num { font-size: 14px; }
 details.mt.off summary { grid-template-columns: 22px auto minmax(0, 1fr) auto auto; }
 details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .gt .sub { color: var(--muted); }
@@ -779,6 +786,8 @@ const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 4, 5, 10, 11 은 넥슨 번호표 기준, 이름이 없는 번호(12, 13)는 기타
 const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '로빙슛', 5: '플레어', 6: '낮은 슛', 7: '발리슛', 8: '프리킥', 9: '페널티킥', 10: '무회전슛', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
+const lineup = (lu, total, who) => `<div class="lu"><div class="lu-h"><span>${esc(who)} 그 경기 명단</span><span class="num">${full(total)}</span></div>
+  <ol>${[...lu].sort((a, b) => (b[3] || 0) - (a[3] || 0)).map(([n, g, pos, pr]) => `<li><span class="pos">${esc(pos)}</span>${gradeBadge(g)}<span class="lu-n">${esc(n)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`;
 const share = (v, t) => `<span class="n num ${v ? '' : 'z'}">${v}<small>${t ? Math.round(v / t * 100) : 0}%</small></span>`;
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
@@ -952,11 +961,11 @@ function viewOfficial(i, season) {
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
       const tags = `${r.pk[0] || r.pk[1] ? `<span class="tag">승부차기 ${r.pk[0]} : ${r.pk[1]}</span>` : ''}${r.e === 1 ? '<span class="tag">몰수승</span>' : r.e === 2 ? '<span class="tag">몰수패</span>' : ''}`;
-      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${tags}</span><time>${mdate(r.d)}</time></summary>
-        ${goalSides(goals, o.nick, r.op, r.g, r.og)}</details>`;
+      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${r.ov ? `<span class="ov num">${compact(r.ov)}</span>` : ''}${tags}</span><time>${mdate(r.d)}</time></summary>
+        ${goalSides(goals, o.nick, r.op, r.g, r.og)}${r.olu ? lineup(r.olu, r.ov, r.op) : ''}</details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">티어는 넥슨이 경기마다 남기는 그 경기 때 티어라, 마지막 경기로 승급하거나 강등됐으면 다음 경기부터 반영됨. 넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+    <p class="note">상대 이름 옆 숫자는 그 경기 상대 명단의 구단 가치이고, 경기를 받은 시점의 시세로 매김. 티어는 넥슨이 경기마다 남기는 그 경기 때 티어라, 마지막 경기로 승급하거나 강등됐으면 다음 경기부터 반영됨. 넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
 
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------

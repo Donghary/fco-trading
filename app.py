@@ -34,6 +34,7 @@ INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
 MATCH_PER_RUN = 600  # 한 번에 받을 경기 상세 수. 한도에 걸리면 그 실행은 멈추고 다음 실행에서 이어 받음
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
+OPP_PER_RUN = 15  # 한 번에 상대 구단 가치를 매길 공식경기 수 (경기당 데이터센터 시세 조회 최대 18번)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
 DATACENTER = "https://fconline.nexon.com/datacenter/"
@@ -116,7 +117,8 @@ def match_rec(d, by_ouid):
         return {"nick": by_ouid.get(x["ouid"], x.get("nickname", "")), "own": x["ouid"] in by_ouid, "res": md.get("matchResult"),
                 "end": md.get("matchEndType"), "goal": sh.get("goalTotal"), "pk": sh.get("shootOutScore"), "poss": md.get("possession"),
                 "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"),
-                "season": md.get("seasonId"), "goals": goals}  # 시즌 번호는 사람마다 다를 수 있어 각자 것을 씀
+                "season": md.get("seasonId"), "goals": goals,  # 시즌 번호는 사람마다 다를 수 있어 각자 것을 씀
+                "lu": [[q.get("spId"), q.get("spGrade"), q.get("spPosition")] for q in x.get("player") or []]}  # 그 경기 명단
     return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
 
 
@@ -150,7 +152,7 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p for p in r["p"]))  # 골 위치나 각자의 시즌 번호가 없는 예전 기록
+    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p or "lu" not in p for p in r["p"]))  # 골 위치, 시즌 번호, 명단이 없는 예전 기록
     stale = [m for m, r in cache.items() if old(r)]
     missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
     todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
@@ -296,7 +298,8 @@ def official_rows(nick, ids, goals=False):
                "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")}
         if goals:
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
-                       mg=[named(g) for g in me["goals"]], og2=[named(g) for g in op["goals"]])
+                       mg=[named(g) for g in me["goals"]], og2=[named(g) for g in op["goals"]], ov=op.get("ov"),
+                       olu=[[NAMES.get(q[0], str(q[0])), q[1], POSITIONS.get(q[2], ""), q[3] if len(q) > 3 else None] for q in op.get("lu", [])] if "ov" in op else None)
         rows.append(row)
     return sorted(rows, key=lambda r: r["d"], reverse=True)
 
@@ -380,6 +383,38 @@ def official_of(nick, s, league=()):
     return {"official": rows, "div": rows[0]["div"] if rows else ""}
 
 
+def value_opponents(prices):
+    """공식경기 상대의 그 경기 명단에 지금 시세를 매겨 저장. 경기마다 한 번만 계산하고 최신 경기부터 조금씩"""
+    cache = dict(prices)  # 이번 실행에서 이미 받은 시세는 다시 받지 않음
+    todo = sorted((m for ids in STATE["off"].values() for m in ids if m in STATE["matches"]
+                   and STATE["matches"][m].get("type") == 50 and "ov" not in STATE["matches"][m]
+                   and all("lu" in p for p in STATE["matches"][m]["p"])),
+                  key=lambda m: STATE["matches"][m]["date"], reverse=True)
+    for m in todo[:OPP_PER_RUN]:
+        r = STATE["matches"][m]
+        for side in r["p"]:
+            if side["own"]:
+                continue
+            total, ok = 0, True
+            for q in side["lu"]:
+                k = (q[0], q[1])
+                if k not in cache:
+                    try:
+                        cache[k] = parse_price(datacenter("PlayerPriceGraph", *k))
+                    except Exception as e:
+                        print("상대 시세 실패", k, e, file=sys.stderr)
+                        ok = False
+                        break
+                    time.sleep(0.1)
+                q[3:] = [cache[k]["now"]]
+                total += cache[k]["now"]
+            if ok:
+                side["ov"] = total
+        if all(side["own"] or "ov" in side for side in r["p"]):
+            r["ov"] = int(time.time())  # 매긴 시각
+    return len(todo) - min(len(todo), OPP_PER_RUN)
+
+
 def write(name, obj):
     f = SITE / name
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -432,6 +467,13 @@ def build():
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
     if keys and not prices:
         raise RuntimeError("조회할 선수가 있는데 시세를 하나도 받지 못함. 이전 결과를 유지함")
+
+    try:
+        left = value_opponents(prices)
+        if left:
+            print("상대 구단 가치", left, "경기는 다음 갱신 때 매김")
+    except Exception as e:
+        print("상대 구단 가치 실패", e, file=sys.stderr)
 
     for n, s in squads.items():  # 실제 구단 가치 : 명단의 모든 선수 시세를 받았을 때만 기록
         ks = [(p["spid"], p["grade"]) for p in s["players"]]
