@@ -2,8 +2,12 @@ name: 시세 갱신
 
 on:
   schedule:
-    - cron: "3-59/10 * * * *"  # 매시 3, 13, 23분... (정각은 GitHub 가 붐벼 자주 밀림. 시세는 정각 무렵 바뀜)
+    - cron: "5 * * * *"  # 보조 수단. GitHub 가 예약을 거의 돌려주지 않아 아래 next 작업이 주 수단임
   workflow_dispatch:
+    inputs:
+      delay:
+        description: 다음 실행까지 기다릴 초 (시험용. 비우면 다음 정시 5분)
+        required: false
   push:
     branches: [main]
 
@@ -11,14 +15,14 @@ permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+  actions: write
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -32,3 +36,20 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # 실행될 때마다 다음 정시 5분에 이 워크플로를 다시 걸어 둠 (넥슨 시세는 정각 무렵 바뀜).
+  # 같은 묶음의 이전 대기는 취소되므로 대기 중인 것은 항상 하나뿐임
+  next:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: next
+      cancel-in-progress: true
+    steps:
+      - run: |
+          wait=$(( (3900 - $(date +%s) % 3600) % 3600 ))
+          [ "$wait" -lt 240 ] && wait=$((wait + 3600))
+          sleep "${DELAY:-$wait}"
+          gh workflow run update.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DELAY: ${{ inputs.delay }}

@@ -289,6 +289,7 @@ const LS = {
 };
 let S = null, NAMES = null, namesLoading = false, namesFailed = false;
 const detail = {};  // 선수 상세 캐시 : key → {at, data | error}
+const STALE = 65 * 60;  // 시세는 1시간마다 갱신됨. 이보다 오래되면 늦은 것
 const ui = { edit: false, sort: 'now', range: {}, q: '', msg: '', busy: false };
 
 // ---------- 숫자 표기 ----------
@@ -658,8 +659,9 @@ function render() {
 function stamp() {
   if (!S) return;
   const min = Math.max(0, Math.round((Date.now() / 1000 - S.updated) / 60)), el = $('#stamp');
-  el.textContent = min < 1 ? '방금 갱신' : min < 60 ? `${min}분 전 갱신` : `${Math.floor(min / 60)}시간 전 갱신`;
-  el.classList.toggle('late', min >= 40);
+  const asked = ui.pinged && ui.pinged > S.updated && Date.now() / 1000 - ui.pinged < 300;
+  el.textContent = asked ? '갱신 요청함, 1~2분 뒤 반영' : min < 1 ? '방금 갱신' : min < 60 ? `${min}분 전 갱신` : `${Math.floor(min / 60)}시간 전 갱신`;
+  el.classList.toggle('late', !asked && min * 60 > STALE);
   el.title = clock(S.updated) + ' 기준';
 }
 async function load() {
@@ -669,6 +671,11 @@ async function load() {
     const fresh = await r.json(), changed = !S || fresh.updated !== S.updated;
     if (S && fresh.v && S.v && fresh.v !== S.v && LS.get('reloaded', '') !== fresh.v) { LS.set('reloaded', fresh.v); return location.reload(); }
     S = fresh;
+    const now = Date.now() / 1000;
+    if (now - S.updated > STALE && LS.get('token', '') && now - LS.get('pinged', 0) > 600) {
+      LS.set('pinged', now);
+      repoWrite('ping.json', () => ({ t: Math.round(now) }), '갱신 요청').then(() => { ui.pinged = now; stamp(); [45, 75, 105, 150].forEach(sec => setTimeout(load, sec * 1000)); }).catch(() => {});
+    }
     if (changed && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)) render(); else stamp();
   } catch {
     if (!S) $('#app').innerHTML = '<div class="bar"><h1>시세를 불러오지 못함</h1></div><p class="note">인터넷 연결을 확인한 뒤 다시 시도하면 됨</p><button class="btn" data-reload>다시 시도</button>';
