@@ -261,7 +261,8 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .pair:hover { background: var(--panel); }
 .pair .pa, .pair .pb { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pair .pb { text-align: right; }
-.pair .ps { font-size: 22px; text-align: center; }
+.pair .ps { font-size: 22px; text-align: center; line-height: 1.15; }
+.pair .ps small { display: block; font: 600 12px var(--num); color: var(--muted); letter-spacing: .02em; }
 .pbar { grid-column: 1 / -1; display: flex; gap: 2px; height: 5px; }
 .pbar b { border-radius: 3px; background: var(--ink); }
 .pbar b:nth-child(2) { background: var(--line-strong); }
@@ -775,7 +776,7 @@ function viewH2H(a, b) {
     <div class="bar"><h2>상대별 전적</h2></div>
     <ol class="rows">${pairs.map(([x, y]) => {
       const st = duel(ms.filter(m => m.p.some(p => p.nick === x.nick) && m.p.some(p => p.nick === y.nick)), x.nick, y.nick), t = tally(st.res), n = st.n || 1;
-      return `<li><a class="pair" href="#/h2h/${x.i}/${y.i}"><span class="pa">${esc(x.nick)}</span><span class="ps num">${t[0]} : ${t[2]}</span><span class="pb">${esc(y.nick)}</span>
+      return `<li><a class="pair" href="#/h2h/${x.i}/${y.i}"><span class="pa">${esc(x.nick)}</span><span class="ps num">${t[0]} : ${t[2]}<small>승률 ${pct(t)} : ${pct([t[2], t[1], t[0]])}%</small></span><span class="pb">${esc(y.nick)}</span>
         <span class="pbar" aria-hidden="true"><b style="flex:${t[0]}"></b><b style="flex:${t[1]}"></b><b style="flex:${t[2]}"></b></span>
         <span class="pm"><span>${st.n}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
     }).join('')}</ol>

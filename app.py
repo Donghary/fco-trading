@@ -290,7 +290,7 @@ def build():
     for n, s in squads.items():
         if not api_key():
             s["error"] = "넥슨 오픈 API 키가 없어 명단을 불러오지 못함"
-        elif s.get("error") or now - s["at"] >= SQUAD_MIN * 60:
+        elif s.get("error") or now - s["at"] >= SQUAD_MIN * 60 or "official" not in s:
             try:
                 refresh_squad(n, s)
                 s["error"] = None
