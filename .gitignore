@@ -3,3 +3,8 @@ meta_*.json
 site/
 __pycache__/
 .DS_Store
+
+worker/.dev.vars
+worker/.wrangler/
+worker/node_modules/
+worker/.cf_token

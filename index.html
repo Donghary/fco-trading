@@ -65,7 +65,7 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 #stamp { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 #stamp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 #stamp.late { color: var(--amber); } #stamp.late::before { background: var(--amber); }
-.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr);
+.dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr);
   height: calc(var(--dock) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--panel); border-top: 1px solid var(--line); }
 .dock a { display: grid; place-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -255,6 +255,11 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .mv-r .num:first-child { font-size: 17px; }
 .mv-r .chg, .mv-r .amt { font-size: 14px; }
 .mv .p-id { grid-area: auto; grid-column: 1; }
+.fname { margin: 26px 0 0; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.recent { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.recent .btn { min-height: 38px; font-weight: 500; }
+.fp { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: "face id now" "face id d"; gap: 2px 10px; align-items: center; padding: 10px 0; }
+.fp .face { grid-area: face; } .fp .p-id { grid-area: id; } .fp .p-now { grid-area: now; } .fp-d { grid-area: d; justify-self: end; font-size: 13px; }
 .mv small { grid-column: 1; }
 
 /* 최근 공식경기 */
@@ -377,6 +382,7 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
   <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
   <symbol id="i-upw" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
   <symbol id="i-dnw" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-find" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
   <symbol id="i-vs" viewBox="0 0 24 24"><path d="M4 6l6 6-6 6M20 6l-6 6 6 6"/></symbol>
   <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
 </svg>
@@ -385,6 +391,7 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
   <nav class="dock" aria-label="주 메뉴">
     <a href="#/" data-nav="home"><svg class="ico"><use href="#i-board"/></svg>구단</a>
     <a href="#/h2h" data-nav="h2h"><svg class="ico"><use href="#i-vs"/></svg>상대전적</a>
+    <a href="#/find" data-nav="find"><svg class="ico"><use href="#i-find"/></svg>구단 검색</a>
     <a href="#/watch" data-nav="watch"><svg class="ico"><use href="#i-star"/></svg>관심선수</a>
   </nav>
   <span id="stamp" role="status"></span>
@@ -968,6 +975,42 @@ function viewOfficial(i, season) {
     <p class="note">상대 이름 옆 숫자는 그 경기 상대 명단의 구단 가치이고, 경기를 받은 시점의 시세로 매김. 티어는 넥슨이 경기마다 남기는 그 경기 때 티어라, 마지막 경기로 승급하거나 강등됐으면 다음 경기부터 반영됨. 넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
 
+// ---------- 구단 검색 : 닉네임으로 아무 구단이나 명단과 구단 가치를 봄 (Cloudflare Worker 중계소, 넥슨 키는 거기에만 있음) ----------
+const SEARCH_API = (() => { try { return localStorage.getItem('searchApi'); } catch { return null; } })() || 'https://fco-search.fco-sise.workers.dev';
+const found2 = {};  // 닉네임 → {data | error | busy}
+function lookup(nick) {
+  if (found2[nick]) return;
+  found2[nick] = { busy: true };
+  fetch(`${SEARCH_API}/club?nick=${encodeURIComponent(nick)}`).then(r => r.json()).then(d => {
+    found2[nick] = d.error ? { error: d.error } : { data: d };
+    if (!d.error) LS.set('recentFind', [d.nick, ...LS.get('recentFind', []).filter(x => x !== d.nick)].slice(0, 6));
+    render();
+  }).catch(() => { found2[nick] = { error: '검색 서버에 연결하지 못함. 잠시 뒤 다시 찾아보면 됨' }; render(); });
+}
+function viewFind(q) {
+  q = q ? decodeURIComponent(q) : '';
+  const recent = LS.get('recentFind', []);
+  const form = `<div class="bar"><h1>구단 검색</h1></div>
+    <form class="find" data-club><input class="field" id="club" type="search" value="${esc(q)}" placeholder="구단주 닉네임" autocomplete="off" enterkeyhint="search" aria-label="구단주 닉네임"><button class="btn go">찾기</button></form>
+    ${!q && recent.length ? `<div class="recent">${recent.map(n => `<a class="btn" href="#/find/${encodeURIComponent(n)}">${esc(n)}</a>`).join('')}</div>` : ''}`;
+  if (!q) return form + '<p class="note">게임에서 만난 상대나 궁금한 구단의 닉네임을 넣으면, 가장 최근 경기에 나온 18명과 지금 시세로 계산한 구단 가치를 보여줌</p>';
+  lookup(q); loadNames();
+  const f = found2[q];
+  if (!f || f.busy) return form + '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  if (f.error) return form + `<p class="msg" role="alert">${esc(f.error)}</p>`;
+  const d = f.data, name = sp => NAMES?.players?.[sp % 1000000]?.[0] || '', season = sp => NAMES?.seasons?.[Math.floor(sp / 1000000)] || [];
+  const ps = d.players.map(p => ({ ...p, name: name(p.spid), season: season(p.spid)[0] || '', seasonImg: season(p.spid)[1] || '', hist: [] }));
+  const now = ps.reduce((a, p) => a + (p.now || 0), 0), d1 = ps.reduce((a, p) => a + (p.d1 ?? p.now ?? 0), 0), d7 = ps.reduce((a, p) => a + (p.d7 ?? p.now ?? 0), 0);
+  const row = p => { const [pc, amt] = move(p.now, p.d1);
+    return `<li class="fp">${face(p)}<span class="p-id">${ident(p)}<span class="pos">${esc(p.pos)}</span></span><span class="p-now num">${compact(p.now)}</span><span class="fp-d">${p.d1 ? `${pc} ${amt}` : ''}</span></li>`; };
+  return form + `<h2 class="fname">${esc(d.nick)}</h2>
+    <div class="quote">${bigPrice(now)}${agoBlock(now, d1, d7)}
+      <div class="ofform">${d.div ? `<span>${esc(d.div)}</span>` : ''}<span>${esc(d.mode)} ${mdate(d.match)}, ${esc(d.opp || '')} 상대 ${d.score[0] ?? '-'} : ${d.score[1] ?? '-'} ${esc(d.result || '')}</span></div></div>
+    <div class="bar"><h2>그 경기 명단 18명 (시세순)</h2></div>
+    <ol class="rows">${[...ps].sort((a, b) => (b.now || 0) - (a.now || 0)).map(row).join('')}</ol>
+    <p class="note">명단은 그 구단의 가장 최근 공식경기(없으면 감독모드)에 나온 선수 기준이고, 시세는 지금 시세임. 같은 닉네임은 10분 동안 같은 결과를 보여줌.</p>`;
+}
+
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
 function movers() {
   const seen = {};
@@ -993,8 +1036,8 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? viewOwner(+a, b, c) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
-  document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h'].includes(view) ? view : 'home')));
+  $('#app').innerHTML = view === 'o' ? viewOwner(+a, b, c) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : view === 'find' ? viewFind(a) : viewHome();
+  document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h', 'find'].includes(view) ? view : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();
   document.querySelectorAll('[data-roll]').forEach(el => {  // 값이 바뀐 숫자만 넘어오며 바뀜
@@ -1058,6 +1101,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
+  if ('club' in e.target.dataset) { const q = $('#club').value.trim(); $('#club').blur(); if (q) { delete found2[q]; location.hash = '#/find/' + encodeURIComponent(q); } return; }
   if ('find' in e.target.dataset) { const q = $('#q').value.trim(); $('#q').blur(); location.hash = '#/watch' + (q ? '/' + encodeURIComponent(q) : ''); }
   if ('token' in e.target.dataset) { LS.set('token', $('#tok').value.trim()); ui.msg = $('#tok').value.trim() ? '토큰을 이 기기에 넣어 둠. 이제 친구들과 쓸 비밀번호를 정하면 됨' : ''; ui.needToken = true; render(); }
   if ('unlock' in e.target.dataset) unlock($('#pass').value);
