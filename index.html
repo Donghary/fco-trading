@@ -331,6 +331,7 @@ details.mt[open] summary::after { content: "접기"; }
 .lu-h small { color: var(--faint); font-size: 12px; }
 .lu li { display: grid; grid-template-columns: 34px 30px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px 0; font-size: 13px; }
 .lu-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu-n .season { height: 16px; vertical-align: -3px; margin-right: 5px; }
 .lu li .num { font-size: 14px; }
 details.mt.off summary { grid-template-columns: 22px auto minmax(0, 1fr) auto auto; }
 details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
@@ -788,7 +789,7 @@ const LINE = ['LS', 'ST', 'RS', 'LW', 'LF', 'CF', 'RF', 'RW', 'LAM', 'CAM', 'RAM
   'LWB', 'LB', 'LCB', 'CB', 'SW', 'RCB', 'RB', 'RWB', 'GK'];
 const lineup = (lu, total, who) => { const xi = lu.filter(q => q[2] !== 'SUB').sort((a, b) => LINE.indexOf(a[2]) - LINE.indexOf(b[2])), xv = xi.reduce((a, q) => a + (q[3] || 0), 0);
   return `<div class="lu"><div class="lu-h"><span>${esc(who)} 선발 ${xi.length}명</span><span><span class="num">${full(xv)}</span><small> 후보 포함 ${compact(total).replace(/<[^>]+>/g, '')}</small></span></div>
-  <ol>${xi.map(([n, g, pos, pr]) => `<li><span class="pos">${esc(pos)}</span>${gradeBadge(g)}<span class="lu-n">${esc(n)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`; };
+  <ol>${xi.map(([n, g, pos, pr, img]) => `<li><span class="pos">${esc(pos)}</span>${gradeBadge(g)}<span class="lu-n">${img ? `<img class="season" src="${esc(img)}" alt="" height="16" loading="lazy">` : ''}${esc(n)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`; };
 const share = (v, t) => `<span class="n num ${v ? '' : 'z'}">${v}<small>${t ? Math.round(v / t * 100) : 0}%</small></span>`;
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;

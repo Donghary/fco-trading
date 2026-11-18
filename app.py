@@ -299,7 +299,8 @@ def official_rows(nick, ids, goals=False):
         if goals:
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
                        mg=[named(g) for g in me["goals"]], og2=[named(g) for g in op["goals"]], ov=op.get("ov"),
-                       olu=[[NAMES.get(q[0], str(q[0])), q[1], POSITIONS.get(q[2], ""), q[3] if len(q) > 3 else None] for q in op.get("lu", [])] if "ov" in op else None)
+                       olu=[[NAMES.get(q[0], str(q[0])), q[1], POSITIONS.get(q[2], ""), q[3] if len(q) > 3 else None,
+                             SEASONS.get(q[0] // 1000000, {}).get("seasonImg")] for q in op.get("lu", [])] if "ov" in op else None)
         rows.append(row)
     return sorted(rows, key=lambda r: r["d"], reverse=True)
 
