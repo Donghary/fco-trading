@@ -66,6 +66,7 @@ POSITIONS = {p["spposition"]: p["desc"] for p in meta("spposition")}
 # ---------- 넥슨 오픈 API : 구단 명단 ----------
 
 def nexon(path, **q):
+    time.sleep(0.3)  # 연달아 부르면 초당 한도에 걸림(429). 일일 한도는 1,000건
     url = f"https://open.api.nexon.com/fconline/v1/{path}?{urllib.parse.urlencode(q)}"
     try:
         return json.loads(get(url, headers={"x-nxopen-api-key": api_key()}))
