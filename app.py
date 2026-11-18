@@ -472,7 +472,7 @@ def build():
         players.setdefault(spid % 1000000, [name, []])[1].append(spid // 1000000)
     write("names.json", {"players": players, "seasons": {
         i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}})
-    for name in ("index.html", "favicon.png", "icon-180.png", "lock.json"):
+    for name in ("index.html", "favicon.png", "icon-180.png", "icon-192.png", "icon-512.png", "manifest.json", "lock.json"):
         if (ROOT / name).exists():
             (SITE / name).write_bytes((ROOT / name).read_bytes())
     print(time.strftime("%H:%M"), "생성 완료 : 시세", len(prices), "건")

@@ -11,6 +11,11 @@
 <meta property="og:description" content="FC온라인 네 구단의 구단 가치와 선수 시세">
 <link rel="icon" href="favicon.png?v=4" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png?v=4">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="시세판">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
@@ -264,6 +269,8 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 /* 상대전적 */
 .lg { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 64px; gap: 2px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .lg .rk { color: var(--faint); font: 600 15px var(--num); }
+a.lg { transition: background .16s; }
+a.lg:hover { background: var(--panel); }
 .lg b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lg small { grid-column: 2; color: var(--muted); font-size: 12px; }
 .lg .rec { grid-column: 3; grid-row: 1 / span 2; font-size: 17px; }
@@ -817,7 +824,7 @@ const pct = ([w, d, l]) => w + d + l ? Math.round(w / (w + d + l) * 100) : 0;
 function viewH2H(a, b) {
   const H = file('h2h.json'), back = files['h2h.json']?.err;
   if (!H) return `<div class="bar"><h1>상대전적</h1></div>${back ? '<p class="note">전적을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'}`;
-  if (a != null && a !== '') return viewDuel(H, +a, +b);
+  if (a != null && a !== '') return b != null && b !== '' ? viewDuel(H, +a, +b) : viewH2HOwner(H, +a);
   const order = orderOf(), ms = H.matches;
   const since = ms.length ? mdate(ms.at(-1).date).split(' ')[0] : '';
   const table = order.map(o => {
@@ -831,8 +838,8 @@ function viewH2H(a, b) {
   const pairs = [];
   order.forEach((x, i) => order.slice(i + 1).forEach(y => pairs.push([x, y])));
   return `<div class="bar"><h1>네 명 순위 (클래식 1on1)</h1></div>
-    <ol class="rows">${table.map(({ o, st, t }, i) => `<li class="lg"><span class="rk">${i + 1}</span><b>${esc(o.nick)}</b>
-      <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></li>`).join('')}</ol>
+    <ol class="rows">${table.map(({ o, st, t }, i) => `<li><a class="lg" href="#/h2h/${o.i}"><span class="rk">${i + 1}</span><b>${esc(o.nick)}</b>
+      <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></a></li>`).join('')}</ol>
     <div class="bar"><h2>상대별 전적</h2></div>
     <ol class="rows">${pairs.map(([x, y]) => {
       const pm = ms.filter(m => m.p.some(p => p.nick === x.nick) && m.p.some(p => p.nick === y.nick)), st = duel(pm, x.nick, y.nick), t = record(pm, x.nick, y.nick, baseFor(H, x.nick, y.nick));
@@ -841,6 +848,41 @@ function viewH2H(a, b) {
         <span class="pm"><span>${t[0] + t[1] + t[2]}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`;
     }).join('')}</ol>
     <p class="note">넥슨이 주는 경기 기록은 최근 30일뿐이라 ${since}부터 쌓기 시작함. 새 경기는 1시간마다 더해지고, 게임 안 통산 전적과는 다를 수 있음.${H.pending ? ` 아직 받는 중인 경기 ${H.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+}
+
+function viewH2HOwner(H, i) {
+  const o = S.owners[i];
+  if (!o) return notFound('없는 구단주');
+  const ms = H.matches.filter(m => m.p.some(p => p.nick === o.nick)), opp = m => m.p.find(p => p.nick !== o.nick), me = m => m.p.find(p => p.nick === o.nick);
+  const head = `<div class="head"><a class="btn" href="#/h2h" aria-label="상대전적으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)} 상대전적</b></h1></div>`;
+  if (!ms.length) return head + '<p class="note">네 명끼리 붙은 기록이 아직 없음</p>';
+  const others = orderOf().filter(x => x.nick !== o.nick);
+  const per = others.map(x => { const pm = ms.filter(m => opp(m).nick === x.nick); return { x, pm, st: duel(pm, o.nick, x.nick), t: record(pm, o.nick, x.nick, baseFor(H, o.nick, x.nick)) }; });
+  const t = per.reduce((a, r) => [a[0] + r.t[0], a[1] + r.t[1], a[2] + r.t[2]], [0, 0, 0]);
+  const gf = ms.reduce((a, m) => a + (me(m).goal || 0), 0), ga = ms.reduce((a, m) => a + (opp(m).goal || 0), 0);
+  const k = goalKinds(ms.flatMap(m => me(m).goals)), sc = {}, all = Object.values(k.kinds).reduce((a, b) => a + b, 0), pc = (v, n) => n ? Math.round(v / n * 100) : 0;
+  ms.forEach(m => me(m).goals.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
+  const show = ui.more ? ms : ms.slice(0, 20), base = per.some(r => baseFor(H, o.nick, r.x.nick));
+  return head + `<div class="quote duel sm"><div class="big num">${wdl(t)}</div>
+      <div class="ofform"><span>클래식 1on1, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${base ? ', 게임 안 기록 포함' : `, ${mdate(ms.at(-1).date).split(' ')[0]}부터`}</span>${form(ms.map(m => me(m).res))}</div></div>
+    <dl class="kv"><div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div><div><dt>경기당 득점</dt><dd class="num">${(gf / ms.length).toFixed(1)} : ${(ga / ms.length).toFixed(1)}</dd></div>
+      <div><dt>몰수 경기</dt><dd class="num">${ms.filter(m => me(m).end || opp(m).end).length}</dd></div></dl>
+    <section><h2>상대별</h2><ol>${per.map(({ x, st, t }) => `<li><a class="pair" href="#/h2h/${i}/${x.i}"><span class="pa">${esc(o.nick)}</span><span class="ps num">${t[0]} : ${t[2]}<small>승률 ${pct(t)} : ${pct([t[2], t[1], t[0]])}%</small></span><span class="pb">${esc(x.nick)}</span>
+      <span class="pbar" aria-hidden="true"><b style="flex:${t[0]}"></b><b style="flex:${t[1]}"></b><b style="flex:${t[2]}"></b></span>
+      <span class="pm"><span>${t[0] + t[1] + t[2]}경기${t[1] ? `, 무 ${t[1]}` : ''}, 득실 ${st.gf} : ${st.ga}</span>${st.n ? form(st.res) : ''}</span></a></li>`).join('')}</ol></section>
+    <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
+      ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${pc(c, all)}%</span>`).join('')}
+      ${k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${pc(k.out, k.known)}%</span>` : ''}
+      <span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num">${pc(k.solo, all)}%</span></div></section>
+    <section><h2>최다 득점 선수</h2><ol class="scorers" style="display:block">${Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('')}</ol></section>
+    <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
+      const a = me(m), b = opp(m), goals = [...a.goals.map(g => ({ ...g, who: o.nick })), ...b.goals.map(g => ({ ...g, who: b.nick }))].sort((x, y) => x.m - y.m);
+      const tags = `${a.pk || b.pk ? `<span class="tag">승부차기 ${a.pk} : ${b.pk}</span>` : ''}${a.end === 1 ? '<span class="tag">몰수승</span>' : a.end === 2 ? '<span class="tag">몰수패</span>' : ''}`;
+      return `<details class="mt off"><summary>${chip(a.res)}<span class="num">${a.goal ?? '-'} : ${b.goal ?? '-'}</span><span class="op">${esc(b.nick)}${tags}</span><time>${mdate(m.date)}</time></summary>
+        ${goalSides(goals, o.nick, b.nick, a.goal, b.goal)}</details>`;
+    }).join('')}</section>
+    ${ms.length > show.length ? `<button class="btn watchbtn" data-more>${ms.length - show.length}경기 더 보기</button>` : ''}
+    <p class="note">네 명끼리 붙은 클래식 1on1 기록임. 넥슨이 주는 기록은 최근 30일이라 그때부터 쌓기 시작했고, 새 경기는 1시간마다 더해짐.</p>`;
 }
 
 function viewDuel(H, i, j) {
