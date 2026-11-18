@@ -29,10 +29,10 @@ SITE = ROOT / "site"
 OWNERS = ["456화이팅", "우끼끼하하", "게임좀그만해라", "이게임초보인데"]
 REPO = os.environ.get("GITHUB_REPOSITORY", "Donghary/fco-trading")  # 관심선수 저장 위치
 REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 .github/workflows/update.yml
-SQUAD_MIN = 60  # 명단 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
+SQUAD_MIN = 120  # 명단과 경기 목록 갱신 주기(분). 넥슨 API 일일 한도(1,000건)를 아끼려고 시세보다 길게 둠
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
-MATCH_PER_RUN = 20  # 한 번에 받을 경기 상세 수 (일일 한도를 나눠 씀)
+MATCH_PER_RUN = 10  # 한 번에 받을 경기 상세 수 (일일 한도를 나눠 씀)
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
 PORT = 8000
@@ -89,8 +89,9 @@ def refresh_squad(nick, s):
     """s 를 최신 명단으로 고침. ouid 와 최근 경기 번호를 기억해 넥슨 API 호출을 줄임"""
     s["ouid"] = s.get("ouid") or nexon("id", nickname=nick)["ouid"]
     # 50 공식경기, 52 감독모드 각각의 최근 1경기 중 더 최근 것
-    official = nexon("user/match", ouid=s["ouid"], matchtype=50, offset=0, limit=10)
-    s["official"] = official
+    official = nexon("user/match", ouid=s["ouid"], matchtype=50, offset=0, limit=20)
+    s["official"] = official[:10]
+    STATE["off"][nick] = list(dict.fromkeys(official + STATE["off"].get(nick, [])))
     ids = official[:1] + nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)
     if not ids:
         raise RuntimeError("최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음")
@@ -115,7 +116,8 @@ def match_rec(d, by_ouid):
         return {"nick": by_ouid.get(x["ouid"], x.get("nickname", "")), "own": x["ouid"] in by_ouid, "res": md.get("matchResult"),
                 "end": md.get("matchEndType"), "goal": sh.get("goalTotal"), "pk": sh.get("shootOutScore"), "poss": md.get("possession"),
                 "sh": sh.get("shootTotal"), "sot": sh.get("effectiveShootTotal"), "div": x.get("division"), "goals": goals}
-    return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
+    season = next(((x.get("matchDetail") or {}).get("seasonId") for x in d.get("matchInfo", [])), None)
+    return {"v": 2, "date": d["matchDate"], "type": d.get("matchType"), "season": season, "p": [side(x) for x in d.get("matchInfo", [])]}  # v2 : 골 위치 포함
 
 
 def refresh_matches():
@@ -125,8 +127,9 @@ def refresh_matches():
         return
     by_ouid, cache = {o: n for n, o in owners.items()}, STATE["matches"]
     first = not STATE["seeded"]  # 처음 한 번은 넥슨이 주는 30일 치를 끝까지 넘겨 받음
+    listing = first or time.time() - STATE["m_at"] >= SQUAD_MIN * 60
     seen = {}
-    for n, o in owners.items():
+    for n, o in owners.items() if listing else []:
         for off in range(0, 1000 if first else 1, 100):
             got = nexon("user/match", ouid=o, matchtype=40, offset=off, limit=100 if first else 30)
             for m in got:
@@ -134,11 +137,13 @@ def refresh_matches():
             if len(got) < 100:
                 break
     h2h = [m for m, who in seen.items() if len(who) >= 2]  # 두 명 이상의 목록에 같이 있으면 네 명끼리 경기
+    if listing:
+        STATE["m_at"] = time.time()
     off_first = not STATE["off_seeded"]
-    for n, o in owners.items():  # 공식경기 목록 : 처음 한 번은 30일 치 전부, 이후는 최근 20경기
+    for n, o in owners.items() if off_first else []:  # 공식경기 목록 : 처음 한 번만 30일 치 전부. 이후는 명단 갱신 때 같이 받음
         got = []
         for off in range(0, 1000 if off_first else 1, 100):
-            page = nexon("user/match", ouid=o, matchtype=50, offset=off, limit=100 if off_first else 20)
+            page = nexon("user/match", ouid=o, matchtype=50, offset=off, limit=100)
             got += page
             if len(page) < 100:
                 break
@@ -214,7 +219,7 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -334,7 +339,8 @@ def build():
                 refresh_squad(n, s)
                 s["error"] = None
             except Exception as e:
-                s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
+                if "429" not in str(e):  # 일일 한도 초과는 잠깐이라 화면에 띄우지 않음
+                    s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
                 print("명단 조회 실패", n, e, file=sys.stderr)
 
     if api_key():
