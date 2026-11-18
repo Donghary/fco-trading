@@ -747,11 +747,12 @@ const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '칩슛', 5: 
 const shotName = t => SHOT[t] || '기타 슛';
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
+const FAR = 18;  // 중거리 기준 : 골문 중앙에서 18m 이상 (사용자 기준, 박스 안팎 무관)
 const goalLine = (g, who) => { const d = dist(g);
-  return `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')}${who ? ` <span class="gw">(${esc(who)})</span>` : ''}, ${shotName(g.t)}${d != null ? `, 약 ${Math.round(d)}m${g.in ? '' : ' 박스 밖'}` : ''}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`; };
+  return `<li><span class="num">${g.m}'</span>${esc(g.n || '알 수 없음')}${who ? ` <span class="gw">(${esc(who)})</span>` : ''}, ${shotName(g.t)}${d != null ? `, 약 ${Math.round(d)}m${d >= FAR ? ' 중거리' : ''}` : ''}${g.an ? `, 도움 ${esc(g.an)}` : ''}</li>`; };
 function goalKinds(goals) {  // [종류별 수, 박스 밖, 도움 없음, 위치를 아는 골 수]
   const kinds = {}; let out = 0, solo = 0, known = 0;
-  goals.forEach(g => { const n = shotName(g.t); kinds[n] = (kinds[n] || 0) + 1; if (!g.a) solo++; if (g.x) { known++; if (!g.in) out++; } });
+  goals.forEach(g => { const n = shotName(g.t); kinds[n] = (kinds[n] || 0) + 1; if (!g.a) solo++; if (g.x) { known++; if (dist(g) >= FAR) out++; } });
   return { kinds, out, solo, known };
 }
 
@@ -814,9 +815,9 @@ function viewDuel(H, i, j) {
     ${types.length ? `<section><h2>골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">${esc(A)}</span><span class="h n">${esc(B)}</span>
       ${types.map(([k, [x, y]]) => `<span>${k}</span><span class="n num ${x ? '' : 'z'}">${x}</span><span class="n num ${y ? '' : 'z'}">${y}</span>`).join('')}
       ${(() => { const ka = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === A).goals)), kb = goalKinds(ms.flatMap(m => m.p.find(p => p.nick === B).goals));
-        return `${ka.known + kb.known ? `<span class="sub">박스 밖 골 (중거리)</span><span class="n num">${ka.out}</span><span class="n num">${kb.out}</span>` : ''}
+        return `${ka.known + kb.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${ka.out}</span><span class="n num">${kb.out}</span>` : ''}
           <span class="sub">도움 없는 골</span><span class="n num">${ka.solo}</span><span class="n num">${kb.solo}</span>`; })()}</div>
-      ${ms.some(m => m.p.some(p => p.goals.some(g => !g.x && g))) ? '<p class="note">박스 밖 골은 골 위치를 받은 경기만 셈. 예전 경기는 위치를 다시 받는 중</p>' : ''}</section>` : ''}
+      ${ms.some(m => m.p.some(p => p.goals.some(g => !g.x && g))) ? '<p class="note">중거리 골은 골 위치를 받은 경기만 셈. 예전 경기는 위치를 다시 받는 중</p>' : ''}</section>` : ''}
     <section><h2>최다 득점 선수</h2><div class="scorers">${[0, 1].map(side => `<div><h3>${esc(side ? B : A)}</h3><ol>${top(side).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('') || '<li><span>골 없음</span></li>'}</ol></div>`).join('')}</div></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(m => {
       const me = m.p.find(p => p.nick === A), op = m.p.find(p => p.nick === B);
@@ -848,7 +849,7 @@ function viewOfficial(i) {
       <div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
     <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
       ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${Math.round(c / gf * 100)}%</span>`).join('')}
-      ${k.known ? `<span class="sub">박스 밖 골 (중거리)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}
+      ${k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}
       <span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num">${gf ? Math.round(k.solo / gf * 100) : 0}%</span></div></section>
     <section><h2>최다 득점 선수</h2><ol class="scorers" style="display:block">${Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('')}</ol></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
