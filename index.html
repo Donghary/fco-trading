@@ -222,9 +222,9 @@ details { margin-top: 26px; border-top: 1px solid var(--line-strong); }
 summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-weight: 600; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 summary span { color: var(--muted); font-weight: 500; font-size: 13px; }
-details ol { counter-reset: s; color: var(--muted); font-size: 14px; padding-bottom: 6px; }
-details ol li { counter-increment: s; padding: 3px 0 3px 22px; position: relative; }
-details ol li::before { content: counter(s); position: absolute; left: 0; color: var(--faint); font: 600 14px var(--num); }
+details.perm ol { counter-reset: s; color: var(--muted); font-size: 14px; padding-bottom: 6px; }
+details.perm ol li { counter-increment: s; padding: 3px 0 3px 22px; position: relative; }
+details.perm ol li::before { content: counter(s); position: absolute; left: 0; color: var(--faint); font: 600 14px var(--num); }
 .skel { height: 74px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--panel), var(--panel)) 0 16px / 42% 16px no-repeat, linear-gradient(var(--panel), var(--panel)) 100% 16px / 26% 26px no-repeat; }
 
 /* 구단주 화면 탭 */
@@ -327,6 +327,7 @@ details.mt[open] summary::after { content: "접기"; }
 .lu { padding: 0 0 12px; }
 .lu-h { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .lu-h .num { color: var(--ink); font-size: 16px; }
+.lu-h small { color: var(--faint); font-size: 12px; }
 .lu li { display: grid; grid-template-columns: 34px 30px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 4px 0; font-size: 13px; }
 .lu-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lu li .num { font-size: 14px; }
@@ -760,7 +761,7 @@ function viewWatch() {
         <span class="p-id">${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="" height="18" loading="lazy">` : ''}<b>${esc(p.name)}</b><small>${esc(p.season)}</small></span>
         <select class="field" id="g${i}" aria-label="${esc(p.name)} 강화 단계">${[...Array(13).keys()].map(g => `<option value="${g + 1}">${g + 1}강</option>`).join('')}</select>
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
-    <details ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
+    <details class="perm" ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
       ${token ? `<p class="note">이 기기에서 관심선수를 저장하고 뺄 수 있음. 친구들이 토큰 없이 쓰게 하려면 비밀번호를 정해서 알려주면 됨</p>
         <form class="find" data-setlock><input class="field" id="newpass" type="password" placeholder="친구들과 쓸 비밀번호" autocomplete="new-password" aria-label="새 비밀번호"><button class="btn" ${ui.busy ? 'disabled' : ''}>${S.lock ? '비밀번호 바꾸기' : '비밀번호 정하기'}</button></form>
         <p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>`
@@ -793,8 +794,12 @@ const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 4, 5, 10, 11 은 넥슨 번호표 기준, 이름이 없는 번호(12, 13)는 기타
 const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '로빙슛', 5: '플레어', 6: '낮은 슛', 7: '발리슛', 8: '프리킥', 9: '페널티킥', 10: '무회전슛', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
-const lineup = (lu, total, who) => `<div class="lu"><div class="lu-h"><span>${esc(who)} 그 경기 명단</span><span class="num">${full(total)}</span></div>
-  <ol>${[...lu].sort((a, b) => (b[3] || 0) - (a[3] || 0)).map(([n, g, pos, pr]) => `<li><span class="pos">${esc(pos)}</span>${gradeBadge(g)}<span class="lu-n">${esc(n)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`;
+// 명단 순서 : 공격(왼쪽→오른쪽) → 2선(LAM CAM RAM) → 중앙(LM~RM) → 3선(LDM CDM RDM) → 수비(왼쪽→오른쪽) → 키퍼, 후보는 뺌
+const LINE = ['LW', 'LF', 'LS', 'CF', 'ST', 'RS', 'RF', 'RW', 'LAM', 'CAM', 'RAM', 'LM', 'LCM', 'CM', 'RCM', 'RM', 'LDM', 'CDM', 'RDM',
+  'LWB', 'LB', 'LCB', 'CB', 'SW', 'RCB', 'RB', 'RWB', 'GK'];
+const lineup = (lu, total, who) => { const xi = lu.filter(q => q[2] !== 'SUB').sort((a, b) => LINE.indexOf(a[2]) - LINE.indexOf(b[2])), xv = xi.reduce((a, q) => a + (q[3] || 0), 0);
+  return `<div class="lu"><div class="lu-h"><span>${esc(who)} 선발 ${xi.length}명</span><span><span class="num">${full(xv)}</span><small> 후보 포함 ${compact(total).replace(/<[^>]+>/g, '')}</small></span></div>
+  <ol>${xi.map(([n, g, pos, pr]) => `<li><span class="pos">${esc(pos)}</span>${gradeBadge(g)}<span class="lu-n">${esc(n)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`; };
 const share = (v, t) => `<span class="n num ${v ? '' : 'z'}">${v}<small>${t ? Math.round(v / t * 100) : 0}%</small></span>`;
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
