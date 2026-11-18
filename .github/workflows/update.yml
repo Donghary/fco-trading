@@ -38,12 +38,12 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # 실행될 때마다 다음 정시 5분에 이 워크플로를 다시 걸어 둠 (넥슨 시세는 정각 무렵 바뀜).
-  # 같은 묶음의 이전 대기는 취소되므로 대기 중인 것은 항상 하나뿐임
+  # 같은 묶음은 하나만 돌고 하나만 기다리므로, 저장(push)으로 실행이 늘어도 예약 사슬은 하나로 유지됨
   next:
     runs-on: ubuntu-latest
     concurrency:
       group: next
-      cancel-in-progress: true
+      cancel-in-progress: false
     steps:
       - run: |
           wait=$(( (3900 - $(date +%s) % 3600) % 3600 ))
