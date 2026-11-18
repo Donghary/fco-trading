@@ -222,6 +222,16 @@ details ol li { counter-increment: s; padding: 3px 0 3px 22px; position: relativ
 details ol li::before { content: counter(s); position: absolute; left: 0; color: var(--faint); font: 600 14px var(--num); }
 .skel { height: 74px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--panel), var(--panel)) 0 16px / 42% 16px no-repeat, linear-gradient(var(--panel), var(--panel)) 100% 16px / 26% 26px no-repeat; }
 
+/* 구단주 화면 탭 */
+.otabs { position: sticky; top: 52px; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); margin: 14px -16px 0; padding: 0 16px;
+  background: var(--board); border-bottom: 1px solid var(--line-strong); }
+.otabs a { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; color: var(--muted); font-weight: 600; font-size: 15px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .16s; }
+.otabs a:hover { color: var(--ink); }
+.otabs a[aria-current] { color: var(--ink); border-bottom-color: var(--amber); }
+.otabs .num { color: var(--faint); font-size: 14px; }
+.duel.sm .big { font-size: 30px; }
+.otabs + * { margin-top: 6px; }
 /* 경기 결과 칸 : 빨강, 파랑은 시세 등락 전용이라 승패는 명암으로만 구분 */
 .rc { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font: 700 12px/1 var(--sans); flex: none; }
 .rc.w { background: var(--ink); color: var(--board); }
@@ -560,10 +570,23 @@ function viewHome() {
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
 }
 
-function viewOwner(i) {
+function viewOwner(i, tab, season) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
-  const t = team(o.players), pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
+  const t = team(o.players), off = o.official || [], rec = tally(off.map(m => m.r)), w = watchOf(o.nick);
+  tab = ['off', 'watch'].includes(tab) ? tab : 'players';
+  file('official.json');  // 공식경기 탭으로 옮길 때 바로 보이게 미리 받아 둠
+  const tabs = [['players', `선수 시세`, o.players.length], ['off', '공식경기', ''], ['watch', '관심선수', w.length]];
+  const top = `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
+    ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
+    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
+      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 공식 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
+      : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
+    <nav class="otabs" aria-label="${esc(o.nick)} 화면 구역">${tabs.map(([k, label, n]) => `<a href="#/o/${i}${k === 'players' ? '' : '/' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}${n !== '' ? `<span class="num">${n}</span>` : ''}</a>`).join('')}</nav>`;
+  if (tab === 'off') return top + viewOfficial(i, season);
+  if (tab === 'watch') return top + `<div class="bar"><h2>${esc(o.nick)}의 관심선수 ${w.length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
+    ${w.length ? `<ol class="rows">${w.map(p => playerRow(p)).join('')}</ol>` : `<p class="note">아직 관심선수가 없음. "선수 찾아 추가"에서 이름으로 찾아 저장하면 여기서 시세를 따라감</p>`}`;
+  const pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
   const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) }));
   const since = real.length ? `실제 기록, ${clock(real[0].t)}부터 쌓는 중` : '실제 기록을 쌓기 시작함';
   const day = (() => { const start = S.updated - 86400, before = real.filter(p => p.t < start).at(-1);
@@ -571,18 +594,9 @@ function viewOwner(i) {
   const back = '현재 명단을 그때 시세로 계산한 값';
   const ranges = [{ id: '24h', label: '24시간', pts: day, step: true, note: since }, { id: '7d', label: '7일', pts: pts.slice(-8), note: back },
                   { id: '30d', label: '30일', pts, best: true, note: back }, { id: 'rec', label: '전체 기록', pts: real, step: true, note: since }];
-  const off = o.official || [], rec = tally(off.map(m => m.r));
-  after = () => drawChart('team', ranges);
-  return `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
-    ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
-    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
-      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 공식 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
-      + chartHTML('team', ranges) : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
+  if (t.n) after = () => drawChart('team', ranges);
+  return top + `${t.n ? chartHTML('team', ranges) : ''}
     ${o.players.length ? playerList(o.players, o.players, '/o' + i) : ''}
-    ${off.length ? `<div class="bar"><h2>최근 공식경기</h2><a class="btn quiet" href="#/o/${i}/off">전체 기록 보기</a></div><ol class="rows">${off.map(m => `<li class="of">${chip(m.r)}<span class="sc num">${m.g ?? '-'} : ${m.og ?? '-'}</span>
-      <span class="op">${esc(m.op)}${m.pk[0] || m.pk[1] ? `<span class="tag">승부차기 ${m.pk[0]} : ${m.pk[1]}</span>` : ''}${m.e === 1 ? '<span class="tag">몰수승</span>' : m.e === 2 ? '<span class="tag">몰수패</span>' : ''}</span><time>${mdate(m.d)}</time></li>`).join('')}</ol>` : ''}
-    <div class="bar"><h2>${esc(o.nick)}의 관심선수 ${watchOf(o.nick).length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
-    ${watchOf(o.nick).length ? `<ol class="rows">${watchOf(o.nick).map(p => playerRow(p)).join('')}</ol>` : ''}
     <p class="note">명단은 가장 최근 경기(${o.match ? mdate(o.match) : '-'})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
 }
 
@@ -868,7 +882,7 @@ function viewDuel(H, i, j) {
 function viewOfficial(i, season) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
-  const O = file('official.json'), head = `<div class="head"><a class="btn" href="#/o/${i}" aria-label="${esc(o.nick)} 화면으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)} 공식경기</b></h1></div>`;
+  const O = file('official.json'), head = '';  // 구단주 화면의 공식경기 탭 안에 들어가서 머리줄은 없음
   if (!O) return head + (files['official.json']?.err ? '<p class="note">기록을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div><div class="skel"></div>');
   const mine = O.owners[o.nick] || { sum: {}, rows: [] }, s = season ? decodeURIComponent(season) : O.current, isCur = String(s) === String(O.current);
   const past = isCur ? null : file(`official_${O.files?.[s]}.json`);
@@ -882,7 +896,7 @@ function viewOfficial(i, season) {
   const k = goalKinds(rows.flatMap(r => r.mg)), sc = {};
   rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
   const first = rows.at(-1), show = ui.more ? rows : rows.slice(0, 20);
-  return head + `<div class="quote duel"><div class="big num">${wdl(t)}</div>
+  return head + `<div class="quote duel sm"><div class="big num">${wdl(t)}</div>
       <div class="ofform"><span>${esc(mine.labels?.[s] || O.labels?.[s] || s)}${isCur || s === '전체' || String(mine.labels?.[s] || O.labels?.[s]).includes('리그') ? '' : ' (지난 시즌)'}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
     <dl class="kv"><div><dt>${isCur ? '마지막 경기 때 티어' : '마지막 티어'}</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>받은 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
       <div><dt>득실 (받은 경기)</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
@@ -928,7 +942,7 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? (b === 'off' ? viewOfficial(+a, c) : viewOwner(+a)) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
+  $('#app').innerHTML = view === 'o' ? viewOwner(+a, b, c) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : viewHome();
   document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h'].includes(view) ? view : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();
@@ -1007,7 +1021,16 @@ document.addEventListener('keydown', e => { const plot = e.target.closest?.('.pl
 document.addEventListener('error', e => { const img = e.target;  // 선수 사진 : 동작 사진이 없으면 얼굴 사진, 그것도 없으면 빈 칸
   if (!img.classList?.contains('face')) return;
   if (!img.dataset.fb) { img.dataset.fb = 1; img.src = `${CDN}players/p${img.dataset.pid}.png`; } else img.style.visibility = 'hidden'; }, true);
-addEventListener('hashchange', () => { ui.msg = ''; ui.edit = false; ui.more = false; ui.needToken = false; namesFailed = false; render(); scrollTo(0, 0); });
+let lastHash = location.hash;
+addEventListener('hashchange', () => {
+  ui.msg = ''; ui.edit = false; ui.more = false; ui.needToken = false; namesFailed = false;
+  const owner = h => (h.match(/^#\/o\/(\d+)/) || [])[1], same = owner(lastHash) != null && owner(lastHash) === owner(location.hash);
+  lastHash = location.hash;
+  render();
+  if (!same) return scrollTo(0, 0);
+  const tabs = document.querySelector('.otabs'), y = tabs ? tabs.offsetTop - 52 : 0;  // 같은 구단주 안에서 탭을 옮기면 탭 줄 위치를 유지
+  if (scrollY > y) scrollTo(0, y);
+});
 addEventListener('resize', () => Object.entries(charts).forEach(([id, r]) => drawChart(id, r)));
 document.addEventListener('visibilitychange', () => document.hidden || load());
 setInterval(load, 60000);
