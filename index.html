@@ -572,7 +572,7 @@ function viewOwner(i) {
       <span class="op">${esc(m.op)}${m.pk[0] || m.pk[1] ? `<span class="tag">승부차기 ${m.pk[0]} : ${m.pk[1]}</span>` : ''}${m.e === 1 ? '<span class="tag">몰수승</span>' : m.e === 2 ? '<span class="tag">몰수패</span>' : ''}</span><time>${mdate(m.d)}</time></li>`).join('')}</ol>` : ''}
     <div class="bar"><h2>${esc(o.nick)}의 관심선수 ${watchOf(o.nick).length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
     ${watchOf(o.nick).length ? `<ol class="rows">${watchOf(o.nick).map(p => playerRow(p)).join('')}</ol>` : ''}
-    <p class="note">명단은 가장 최근 경기(${esc((o.match || '').slice(0, 10))})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
+    <p class="note">명단은 가장 최근 경기(${o.match ? mdate(o.match) : '-'})에 출전한 선수 기준이고, 시세가 없는 선수는 합계에서 빠짐. 과거 구단 가치는 지금 명단을 그때 시세로 계산한 값임. 오버롤은 적응도 5 에 풀케미를 따로 더한 값임 : ${chem(o.players, 8) ? `8강 이상 +8${chem(o.players, 11) === 9 ? ', 11강 이상 +9' : ''}` : '선발 중 8강 이상이 8명 미만이라 풀케미 없음'}</p>`;
 }
 
 function playerRanges(d) {
@@ -739,7 +739,8 @@ function file(name) {  // 갱신될 때마다 한 번 받아 두고, 받는 동�
   return files[name]?.data;
 }
 const chip = r => `<span class="rc ${r === '승' ? 'w' : r === '패' ? 'l' : 'd'}" title="${esc(r)}">${esc(r || '-')}</span>`;
-const mdate = d => `${+d.slice(5, 7)}.${d.slice(8, 10)} ${d.slice(11, 16)}`;
+// 넥슨 경기 시각은 UTC 라(경기가 한국 기준 밤 9시~새벽 2시에 몰림) 한국 시각으로 바꿔 보여 줌
+const mdate = d => { const k = new Date(Date.parse(d + 'Z') + 9 * 3600e3); return `${k.getUTCMonth() + 1}.${two(k.getUTCDate())} ${two(k.getUTCHours())}:${two(k.getUTCMinutes())}`; };
 const tally = rs => rs.reduce((a, r) => (a[r === '승' ? 0 : r === '패' ? 2 : 1]++, a), [0, 0, 0]);
 const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 슈팅 종류 : 3 헤더, 8 프리킥, 9 페널티킥은 경기 요약 숫자와 대조해 확인함. 나머지는 넥슨 번호표 기준, 이름이 없는 번호는 기타
