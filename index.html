@@ -847,6 +847,10 @@ function viewOfficial(i) {
       <div class="ofform"><span>${rows.length}경기, 승률 ${pct(t)}%, ${mdate(first.d).split(' ')[0]}부터</span>${form(rows.map(r => r.r))}</div></div>
     <dl class="kv"><div><dt>현재 티어</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>기간 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
       <div><dt>득실</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
+    ${(() => { const by = {}; rows.forEach(r => (by[r.s ?? '확인 중'] ??= []).push(r.r));
+      return `<section><h2>시즌별</h2><div class="gt"><span class="h">시즌 번호</span><span class="h n">경기</span><span class="h n">승률</span>
+        ${Object.entries(by).sort((a, b) => String(b[0]).localeCompare(String(a[0]))).map(([k, rs]) => { const t = tally(rs);
+          return `<span>${k === '확인 중' ? '시즌 번호 받는 중' : esc(k)}<span class="gw"> ${t[0]}승 ${t[1]}무 ${t[2]}패</span></span><span class="n num">${rs.length}</span><span class="n num">${pct(t)}%</span>`; }).join('')}</div></section>`; })()}
     <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
       ${Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${Math.round(c / gf * 100)}%</span>`).join('')}
       ${k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${Math.round(k.out / k.known * 100)}%</span>` : ''}

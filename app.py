@@ -150,8 +150,9 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    stale = [m for m, r in cache.items() if r.get("v") != 2]  # 골 위치가 없는 예전 기록은 다시 받음
-    todo = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older + stale) if m not in cache or cache[m].get("v") != 2]
+    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and "season" not in r)  # 골 위치나 시즌 번호가 없는 예전 기록
+    stale = [m for m, r in cache.items() if old(r)]
+    todo = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older + stale) if m not in cache or old(cache[m])]
     done = 0
     for m in todo[:MATCH_PER_RUN]:
         try:
@@ -291,7 +292,7 @@ def official_rows(nick, ids, goals=False):
         if not me:
             continue
         op = r["p"][1] if r["p"][0] is me else r["p"][0]
-        row = {"d": r["date"], "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
+        row = {"d": r["date"], "s": r.get("season"), "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
                "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")}
         if goals:
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
