@@ -279,7 +279,6 @@ details ol li::before { content: counter(s); position: absolute; left: 0; color:
 .gt .h { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gt .n { text-align: right; font-size: 17px; }
 .gt .n.z { color: var(--faint); }
-.gt .n.sh { background: linear-gradient(var(--flat), var(--flat)) right bottom / var(--w) 3px no-repeat; }  /* .bar 는 구역 머리 줄 이름이라 피함 */
 .gt .n small { display: inline-block; min-width: 34px; margin-left: 6px; font: 600 12px var(--num); color: var(--muted); text-align: right; }
 .scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 .scorers h3 { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 0 2px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -749,7 +748,7 @@ const wdl = ([w, d, l]) => `${w}<i>승</i> ${d}<i>무</i> ${l}<i>패</i>`;
 // 4, 5, 10, 11 은 넥슨 번호표 기준, 이름이 없는 번호(12, 13)는 기타
 const SHOT = { 1: '일반 슛', 2: '감아차기', 3: '헤더', 4: '로빙슛', 5: '플레어', 6: '낮은 슛', 7: '발리슛', 8: '프리킥', 9: '페널티킥', 10: '무회전슛', 11: '바이시클' };
 const shotName = t => SHOT[t] || '기타 슛';
-const share = (v, t) => { const r = t ? Math.round(v / t * 100) : 0; return `<span class="n num sh ${v ? '' : 'z'}" style="--w:${r}%">${v}<small>${r}%</small></span>`; };
+const share = (v, t) => `<span class="n num ${v ? '' : 'z'}">${v}<small>${t ? Math.round(v / t * 100) : 0}%</small></span>`;
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
 const dist = g => g.x ? Math.hypot((1 - g.x) * 105, (g.y - .5) * 68) : null;
 const FAR = 18;  // 중거리 기준 : 골문 중앙에서 18m 이상 (사용자 기준, 박스 안팎 무관)
@@ -867,15 +866,15 @@ function viewOfficial(i, season) {
   rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
   const first = rows.at(-1), show = ui.more ? rows : rows.slice(0, 20);
   return head + `<div class="quote duel"><div class="big num">${wdl(t)}</div>
-      <div class="ofform"><span>${esc(O.labels?.[s] || s)}${isCur || s === '전체' || String(O.labels?.[s]).startsWith('다른') ? '' : ' (지난 시즌)'}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
+      <div class="ofform"><span>${esc(O.labels?.[s] || s)}${isCur || s === '전체' || String(O.labels?.[s]).includes('리그') ? '' : ' (지난 시즌)'}, ${t[0] + t[1] + t[2]}경기, 승률 ${pct(t)}%${sum?.base ? `, 게임 안 기록(${mdate(sum.base.asof)}까지) 포함` : `, 받은 기록 ${mdate(first.d).split(' ')[0]}부터`}</span>${form(rows.map(r => r.r))}</div></div>
     <dl class="kv"><div><dt>${isCur ? '현재 티어' : '마지막 티어'}</dt><dd>${esc(rows[0].div || '-')}</dd></div><div><dt>받은 첫 경기 티어</dt><dd>${esc(first.div || '-')}</dd></div>
       <div><dt>득실 (받은 경기)</dt><dd class="num">${gf} : ${ga}</dd></div></dl>
     ${list}
     <section><h2>내 골 종류</h2><div class="gt"><span class="h">종류</span><span class="h n">골</span><span class="h n">비율</span>
       ${(() => { const all = Object.values(k.kinds).reduce((a, b) => a + b, 0), pc = (v, t) => t ? Math.round(v / t * 100) : 0;
-        return Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num sh" style="--w:${pc(c, all)}%">${pc(c, all)}%</span>`).join('')
-        + (k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num sh" style="--w:${pc(k.out, k.known)}%">${pc(k.out, k.known)}%</span>` : '')
-        + `<span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num sh" style="--w:${pc(k.solo, all)}%">${pc(k.solo, all)}%</span>`; })()}</div></section>
+        return Object.entries(k.kinds).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<span>${n}</span><span class="n num">${c}</span><span class="n num">${pc(c, all)}%</span>`).join('')
+        + (k.known ? `<span class="sub">중거리 골 (18m 이상)</span><span class="n num">${k.out}</span><span class="n num">${pc(k.out, k.known)}%</span>` : '')
+        + `<span class="sub">도움 없는 골</span><span class="n num">${k.solo}</span><span class="n num">${pc(k.solo, all)}%</span>`; })()}</div></section>
     <section><h2>최다 득점 선수</h2><ol class="scorers" style="display:block">${Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `<li><span>${esc(n)}</span><span class="num">${c}골</span></li>`).join('')}</ol></section>
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
@@ -884,7 +883,7 @@ function viewOfficial(i, season) {
         <ol>${goals.map(g => goalLine(g, g.who)).join('') || '<li>골 없음</li>'}</ol></details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
-    <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
+    <p class="note">넥슨이 주는 공식경기 기록은 최근 약 30일이라, 받은 경기는 지우지 않고 시즌별로 계속 쌓음. 시즌이 바뀌면 지난 시즌은 위 시즌 목록에서 따로 볼 수 있음. 월드클래스 리그 같은 리그 경기는 공식경기 전적에 들어가지 않아 따로 묶음.${O.pending ? ` 아직 받는 중인 경기 ${O.pending}건은 다음 갱신 때 더해짐.` : ''}</p>`;
 }
 
 // ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------

@@ -307,10 +307,9 @@ def baselines():
     return json.loads(f.read_text()) if f.exists() else {}
 
 
-def write_official():
-    """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
-    # 시즌 : 구단주 본인 쪽 seasonId 기준. 다른 번호의 기간 안에 끼어 잠깐 나오는 번호(예 : 202606 기간 중 11.06 밤 202611)는
-    # 그 기간의 시즌에 합침. 같은 경기 상대는 대부분 202606 이고 fcgg 도 일반 공식경기로 보여 주므로 모드 차이가 아니라 넥슨 기록의 일시적 값으로 봄
+def season_split():
+    """시즌 : 구단주 본인 쪽 seasonId 기준. 다른 번호의 기간 안에 끼어 잠깐 나오는 번호(예 : 202606 기간 중 11.06 밤 202611)는
+    월드클래스 리그 같은 리그 경기임. 공식경기로 기록되지만 공식경기 전적에는 들어가지 않아(사용자 확인) 따로 묶고 시즌 전적에서 뺌"""
     rows = {n: official_rows(n, STATE["off"].get(n, []), goals=True) for n in OWNERS}
     span = {}
     for rs in rows.values():
@@ -320,15 +319,30 @@ def write_official():
                 span[r["s"]] = (min(lo, r["d"]), max(hi, r["d"]))
     side = {k for k, (lo, hi) in span.items() if any(a < lo and hi < b for o, (a, b) in span.items() if o != k)}
     main = sorted((k for k in span if k not in side), key=lambda k: span[k][1], reverse=True)
+    return rows, span, side, main
+
+
+def mdate(d):  # 넥슨 시각(UTC) → 한국 날짜 "11.06"
+    t = time.gmtime(time.mktime(time.strptime(d[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone + 9 * 3600)
+    return f"{t.tm_mon}.{t.tm_mday:02d}"
+
+
+def write_official():
+    """공식경기 : 지금 시즌은 official.json, 지난 시즌은 official_<시즌>.json 으로 나눠 씀. 시즌 요약은 모든 시즌을 담음"""
+    rows, span, side, main = season_split()
     for rs in rows.values():
         for r in rs:
-            if r["s"] in side:  # 끼어 있는 번호는 그 날짜를 품은 시즌으로
-                r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), r["s"])
             if not r["s"]:  # 시즌 번호를 아직 못 받은 경기는 날짜로 추정
                 r["s"] = next((k for k in main if span[k][0] <= r["d"] <= span[k][1]), main[0] if main else None)
             r["s"] = str(r["s"]) if r["s"] else "전체"
-    labels = {str(k): f"시즌 {k}" for k in main} | {"전체": "시즌 구분 전"}
-    seasons = [str(k) for k in main] + ["전체"]
+
+    def league_name(k):  # 리그 이름 : 그 경기들의 등급 이름에서 숫자를 뗌 (예 : 월드클래스3 → 월드클래스 리그)
+        divs = [r["div"] for rs in rows.values() for r in rs if r["s"] == str(k) and r["div"]]
+        name = re.sub(r"\d+$", "", max(set(divs), key=divs.count)) if divs else ""
+        return f"{name} 리그".strip() + f" ({mdate(span[k][0])})"
+
+    labels = {str(k): f"시즌 {k}" for k in main} | {str(k): league_name(k) for k in side} | {"전체": "시즌 구분 전"}
+    seasons = [str(k) for k in main] + [str(k) for k in sorted(side, key=lambda k: span[k][0], reverse=True)] + ["전체"]
     seasons = [x for x in seasons if any(r["s"] == x for rs in rows.values() for r in rs)]
     cur = seasons[0] if seasons else None
     base = baselines().get("official", {})
@@ -354,19 +368,9 @@ def write_official():
         write(f"official_{i}.json", {"owners": {n: [r for r in rs if r["s"] == season] for n, rs in rows.items()}})
 
 
-def official_of(nick, s):
-    """구단주의 최근 공식경기 요약 : 경기별 결과와 가장 최근 경기의 등급"""
-    rows = []
-    for m in s.get("official", []):
-        r = STATE["matches"].get(m)
-        if not r or len(r["p"]) != 2:
-            continue
-        me = next((p for p in r["p"] if p["nick"] == nick), None)
-        if not me:
-            continue
-        op = r["p"][1] if r["p"][0] is me else r["p"][0]
-        rows.append({"d": r["date"], "r": me["res"], "e": me["end"], "g": me["goal"], "og": op["goal"], "op": op["nick"],
-                     "pk": [me["pk"], op["pk"]], "div": DIVISIONS.get(me["div"], "")})
+def official_of(nick, s, league=()):
+    """구단주의 최근 공식경기 요약 : 경기별 결과와 가장 최근 경기의 등급. 리그 경기는 공식경기 전적이 아니라 뺌"""
+    rows = [r for r in official_rows(nick, s.get("official", [])) if r["s"] not in league]
     return {"official": rows, "div": rows[0]["div"] if rows else ""}
 
 
@@ -435,9 +439,10 @@ def build():
     STATE["intra"] = {k: v for k, v in STATE["intra"].items() if v}
 
     write("state.json", STATE)
+    league = season_split()[2]
     write("data.json", {
         "updated": now, "repo": REPO, "v": hashlib.md5((ROOT / "index.html").read_bytes()).hexdigest()[:8],
-        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s),
+        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s, league),
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
         "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
