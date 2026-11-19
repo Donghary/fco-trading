@@ -167,7 +167,7 @@ a.p:hover { background: var(--panel); }
 .p-id { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .p-meta { grid-area: meta; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .p-meta .ovr-n { font-size: 14px; }
-.mv small .pay { margin-right: 8px; }
+.mv small { display: flex; align-items: center; gap: 8px; }
 .p-id b { font-weight: 700; font-size: 16px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .season { height: 20px; width: auto; flex: none; }  /* 강화 배지(.g) 높이와 같게 */
 .pos { color: var(--muted); font: 600 13px var(--num); flex: none; }
@@ -285,8 +285,9 @@ details.perm ol li::before { content: counter(s); position: absolute; left: 0; c
 .ofform > span:not(.form) { white-space: nowrap; }
 .ofform b { color: var(--ink); font-weight: 600; }
 .ofform .over { color: var(--amber); }  /* 상한 넘김 */
-.pay { flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.pay .num { color: var(--ink); font-size: 14px; }  /* 승무패가 중간에서 끊기지 않게 줄 단위로만 넘김 */
+/* 급여 : 게임과 데이터센터처럼 육각형 안에 숫자 (모양만 따라 그림, 색은 이 화면에 맞춤) */
+.pay { flex: none; display: inline-grid; place-items: center; width: 22px; height: 24px; align-self: center; color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 24'%3E%3Cpath d='M11 1.2 20.6 6.6v10.8L11 22.8 1.4 17.4V6.6z' fill='%23202224' stroke='%2385888D' stroke-width='1.4'/%3E%3C/svg%3E") center / contain no-repeat; }
 .srec { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 /* 상대전적 */
@@ -480,7 +481,7 @@ const gradeBadge = g => `<span class="g g${g >= 11 ? 11 : g >= 8 ? 8 : g >= 5 ? 
 const face = p => `<img class="face" src="${CDN}playersAction/p${p.spid}.png" data-pid="${p.spid % 1000000}" alt="" width="48" height="48" loading="lazy">`;
 const ident = p => `${p.seasonImg ? `<img class="season" src="${esc(p.seasonImg)}" alt="${esc(p.season)}" height="20">` : ''}${gradeBadge(p.grade)}<b>${esc(p.name)}</b>`;
 // 급여 : 선수 목록에선 이름 아래 줄(포지션, 오버롤, 급여). 이름이 잘리지 않게 한 줄 내림 (사용자 선택). 골 기록에는 넣지 않음
-function payTag(v) { return v ? `<span class="pay">급여 <span class="num">${v}</span></span>` : ''; }
+function payTag(v) { return v ? `<span class="pay num" title="급여"><span class="sr">급여 </span>${v}</span>` : ''; }
 
 // ---------- 풀케미 오버롤 ----------
 // 받아온 능력치는 적응도 5 가 이미 반영된 값이고, 풀케미는 그 위에 따로 더함 (사용자 기준)
