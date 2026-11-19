@@ -274,7 +274,7 @@ details.perm ol li::before { content: counter(s); position: absolute; left: 0; c
 .ofform { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; color: var(--muted); font-size: 13px; }
 .ofform > span:not(.form) { white-space: nowrap; }
 .ofform b { color: var(--ink); font-weight: 600; }
-.ofform .over { color: var(--amber); }
+.ofform .over { color: var(--amber); }  /* 상한 넘김 */
 .pay { flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pay .num { color: var(--ink); font-size: 14px; }  /* 승무패가 중간에서 끊기지 않게 줄 단위로만 넘김 */
 .srec { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -609,8 +609,8 @@ const PAY_CAP = 315;  // 선발 11명 급여 합계 상한 (사용자 기준, �
 function payLine(players) {
   const xi = players.filter(p => p.pos && p.pos !== 'SUB');
   if (!xi.length || xi.some(p => !p.pay)) return '';
-  const sum = xi.reduce((a, p) => a + p.pay, 0), left = PAY_CAP - sum;
-  return `<div class="ofform"><span>선발 ${xi.length}명 급여 <b class="num">${sum}</b> / ${PAY_CAP}</span><span class="${left < 0 ? 'over' : ''}">${left < 0 ? `${-left} 초과` : `${left} 남음`}</span></div>`;
+  const sum = xi.reduce((a, p) => a + p.pay, 0);
+  return `<div class="ofform"><span>선발 ${xi.length}명 급여 <b class="num ${sum > PAY_CAP ? 'over' : ''}">${sum}</b>/${PAY_CAP}</span></div>`;
 }
 function viewOwner(i, tab, season) {
   const o = S.owners[i];
