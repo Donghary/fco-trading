@@ -446,7 +446,12 @@ function full(n) {  // 355억 3,600만
   if (r && Math.abs(n) < 1e7) out.push(r.toLocaleString('ko-KR'));
   return out.slice(0, 2).join(' ');
 }
-function compact(n) {  // 18.5억
+function compact(n) {  // 18억 5,123만 : 화면의 금액은 두 단위로 끊어 씀 (사용자 기준)
+  if (n == null) return '<span class="na">준비 중</span>';
+  if (!n) return '<span class="na">없음</span>';
+  return Math.abs(n) < 1e4 ? Math.abs(n).toLocaleString('ko-KR') : full(Math.round(n / 1e4) * 1e4);  // 만 아래는 버림
+}
+function short(n) {  // 18.5억 : 차트 눈금, 좁은 요약 칸 전용
   if (n == null) return '<span class="na">준비 중</span>';
   if (!n) return '<span class="na">없음</span>';
   const a = Math.abs(n);
@@ -531,14 +536,14 @@ function drawChart(id, ranges) {
   const d = pts.map((p, i) => i ? (r.step ? `H${X(p.t).toFixed(1)}V${Y(p.v).toFixed(1)}` : `L${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`) : `M${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`).join('');
   const ticks = max === min ? [max] : [max, (max + min) / 2, min];
   plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
-    ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${W - R + 8}" y="${Y(v) + 4}">${compact(v).replace(/<[^>]+>/g, '')}</text>`).join('')}
+    ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${W - R + 8}" y="${Y(v) + 4}">${short(v).replace(/<[^>]+>/g, '')}</text>`).join('')}
     <path d="${d}L${X(t1)} ${H - B}L${X(t0)} ${H - B}Z" fill="var(--${dir})" opacity=".1"/>
     <line class="base" x1="${L}" x2="${W - R}" y1="${Y(vs[0])}" y2="${Y(vs[0])}"/>
     <path class="series" d="${d}" stroke="var(--${dir})"/>
     <text x="${L}" y="${H - 6}">${esc(pts[0].lab)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(pts.at(-1).lab)}</text>
     <g class="hover" hidden><line class="cross" y1="${T}" y2="${H - B}"/><circle r="4.5" fill="var(--board)" stroke="var(--${dir})" stroke-width="2.5"/></g>
   </svg>`;
-  plot.setAttribute('aria-label', `${r.label} 시세 추이. 최저 ${compact(min).replace(/<[^>]+>/g, '')}, 최고 ${compact(max).replace(/<[^>]+>/g, '')}`);
+  plot.setAttribute('aria-label', `${r.label} 시세 추이. 최저 ${short(min).replace(/<[^>]+>/g, '')}, 최고 ${short(max).replace(/<[^>]+>/g, '')}`);
   foot.innerHTML = `<span>최저 <span class="num mm">${compact(min)}</span></span><span>최고 <span class="num mm">${compact(max)}</span></span>${r.note ? `<span>${esc(r.note)}</span>` : ''}`;
   plot._pts = pts; plot._geo = { X, Y, W, L, R };
   hoverChart(plot, null);
@@ -819,7 +824,7 @@ const shotName = t => SHOT[t] || '기타 슛';
 const LINE = ['LS', 'ST', 'RS', 'LW', 'LF', 'CF', 'RF', 'RW', 'LAM', 'CAM', 'RAM', 'LM', 'LCM', 'CM', 'RCM', 'RM', 'LDM', 'CDM', 'RDM',
   'LWB', 'LB', 'LCB', 'CB', 'SW', 'RCB', 'RB', 'RWB', 'GK'];
 const lineup = (lu, total, who) => { const xi = lu.filter(q => q[2] !== 'SUB').sort((a, b) => LINE.indexOf(a[2]) - LINE.indexOf(b[2])), xv = xi.reduce((a, q) => a + (q[3] || 0), 0);
-  return `<div class="lu"><div class="lu-h"><span>${esc(who)} 선발 ${xi.length}명</span><span><span class="num">${full(xv)}</span><small> 후보 포함 ${compact(total).replace(/<[^>]+>/g, '')}</small></span></div>
+  return `<div class="lu"><div class="lu-h"><span>${esc(who)} 선발 ${xi.length}명</span><span><span class="num">${full(xv)}</span><small> 후보 포함 ${short(total).replace(/<[^>]+>/g, '')}</small></span></div>
   <ol>${xi.map(([n, g, pos, pr, img, py]) => `<li><span class="pos">${esc(pos)}</span><span class="lu-s">${img ? `<img class="season" src="${esc(img)}" alt="" height="20" loading="lazy">` : ''}</span>${gradeBadge(g)}<span class="lu-n"><span>${esc(n)}</span>${payTag(py)}</span><span class="num">${compact(pr)}</span></li>`).join('')}</ol></div>`; };
 const share = (v, t) => `<span class="n num ${v ? '' : 'z'}">${v}<small>${t ? Math.round(v / t * 100) : 0}%</small></span>`;
 // 골 위치 : x 는 상대 골문 쪽이 1, y 는 터치라인 사이. 경기장을 105m x 68m 로 보고 골문 중앙까지 거리를 어림함
@@ -994,7 +999,7 @@ function viewOfficial(i, season) {
     <section><h2>경기 기록 (최신순)</h2>${show.map(r => {
       const goals = [...r.mg.map(g => ({ ...g, who: o.nick })), ...r.og2.map(g => ({ ...g, who: r.op }))].sort((x, y) => x.m - y.m);
       const tags = `${r.pk[0] || r.pk[1] ? `<span class="tag">승부차기 ${r.pk[0]} : ${r.pk[1]}</span>` : ''}${r.e === 1 ? '<span class="tag">몰수승</span>' : r.e === 2 ? '<span class="tag">몰수패</span>' : ''}`;
-      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${r.ov ? `<span class="ov">상대 <span class="num">${compact(r.ov)}</span></span>` : ''}${tags}</span><time>${mdate(r.d)}</time></summary>
+      return `<details class="mt off"><summary>${chip(r.r)}<span class="num">${r.g ?? '-'} : ${r.og ?? '-'}</span><span class="op">${esc(r.op)}${r.ov ? `<span class="ov">상대 <span class="num">${short(r.ov)}</span></span>` : ''}${tags}</span><time>${mdate(r.d)}</time></summary>
         ${goalSides(goals, o.nick, r.op, r.g, r.og)}${r.olu ? lineup(r.olu, r.ov, r.op) : ''}</details>`;
     }).join('')}</section>
     ${rows.length > show.length ? `<button class="btn watchbtn" data-more>${rows.length - show.length}경기 더 보기</button>` : ''}
