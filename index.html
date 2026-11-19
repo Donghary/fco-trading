@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>
 :root {
-  --board: #101112; --panel: #17181A; --raise: #202224; --line: #2A2C2F; --line-strong: #44474C;
+  --board: #101112; --panel: #1A1C1F; --raise: #25282C; --line: #2A2C2F; --line-strong: #44474C;
   --ink: #F0F1F2; --muted: #9C9FA4; --faint: #85888D;
   --up: #FF5B4F; --down: #4C9DFF; --flat: #C8CACD;
   --amber: #FFC233; --amber-ink: #1B1400;
@@ -70,11 +70,11 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 /* 틀 */
 .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 52px;
   padding: 0 max(16px, env(safe-area-inset-left)); background: var(--board); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 800; font-size: 17px; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+.brand { font-weight: 700; font-size: 17px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
 .brand img { width: 26px; height: 26px; }
 #stamp { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
-#stamp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-#stamp.late { color: var(--amber); } #stamp.late::before { background: var(--amber); }
+#stamp.late { color: var(--amber); }
+#stamp.late::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }  /* 평소엔 점 없이 시각만 */
 .dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr);
   height: calc(var(--dock) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--panel); border-top: 1px solid var(--line); }
@@ -83,8 +83,12 @@ svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-wi
 main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(safe-area-inset-bottom) + 28px); }
 .foot { color: var(--faint); font-size: 12px; padding: 28px 0 0; }
 
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding-top: 10px; }
-.bar h1, .bar h2 { font-size: 13px; font-weight: 600; color: var(--muted); }
+/* 구역 머리 띠 : 판 폭 전체, 한 단계 밝은 면 (객장 시세판의 머리 띠) */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; min-height: 46px; margin: 18px -16px 0; padding: 4px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line-strong); }
+.bar h1, .bar h2 { font-size: 15px; font-weight: 700; color: var(--ink); }
+.bar + .rows, .bar + .board { border-top: 0; }
+.bar .btn.quiet { min-height: 38px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px;
   border-radius: 8px; border: 1px solid var(--line-strong); background: transparent; font-size: 14px; font-weight: 600;
   transition: background .16s, border-color .16s, color .16s; }
@@ -99,8 +103,12 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 /* 홈 : 시세판 */
 .board { border-top: 1px solid var(--line-strong); }
 .q { position: relative; border-bottom: 1px solid var(--line); }
-.q-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 14px 0 12px; transition: background .16s; }
-.q-main:hover { background: var(--panel); }
+.q-main { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 2px 12px; padding-top: 14px; padding-bottom: 12px; transition: background .16s; }
+/* 가치 순위 : 보이는 순서는 사용자가 정한 대로, 순위는 칸으로만 */
+.q-rank { grid-row: 1 / span 2; align-self: start; display: grid; justify-items: start; gap: 2px; padding-top: 2px; }
+.q-rank b { font: 700 28px/1 var(--num); color: var(--ink); }
+.q-rank .chg { font-size: 13px; }
+.q-main, .mv { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
 .q-name { font-size: 17px; font-weight: 700; letter-spacing: -.02em; align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-val { font-size: 32px; line-height: 1.05; text-align: right; }
 .q-sub { color: var(--muted); font-size: 13px; }
@@ -109,11 +117,14 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .q-chg .lbl { color: var(--muted); font: 500 12px var(--sans); }
 .q-chg .chg, .q-chg .amt { justify-self: end; }
 .q-chg .amt { font-weight: 500; min-width: 64px; text-align: right; }
-.q-line { grid-column: 1 / -1; width: 100%; height: 34px; margin-top: 8px; }
-.q-line path { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.q-err { grid-column: 1 / -1; color: var(--amber); font-size: 13px; }
+.q-line { grid-column: 2 / -1; width: 100%; height: 26px; margin-top: 6px; }
+.q-line path { fill: none; stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.q-line.flat { color: var(--muted); }
+.q-gap { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
+.q-gap .num { color: var(--flat); font-size: 14px; }
+.q-err { grid-column: 2 / -1; color: var(--amber); font-size: 13px; }
 .editing .q-main { padding-right: 100px; pointer-events: none; min-height: 72px; align-content: center; }
-.editing .q-val, .editing .q-chg, .editing .q-line { display: none; }
+.editing .q-val, .editing .q-chg, .editing .q-line, .editing .q-gap { display: none; }
 .q-move { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
 .q-move .btn { width: 44px; padding: 0; }
 .q-more { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid var(--line); font-weight: 700; }
@@ -122,21 +133,21 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 /* 상세 머리 */
 .head { display: flex; align-items: center; gap: 4px; min-height: 52px; margin-left: -10px; }
 .head .btn { width: 44px; padding: 0; border-color: transparent; }
-.head h1 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; gap: 7px; min-width: 0; }
+.head h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; min-width: 0; }
 .head h1 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quote { padding: 4px 0 6px; }
 .quote .big { font-size: 40px; line-height: 1.05; }
 .quote .big small { font: 600 14px var(--sans); color: var(--muted); margin-left: 6px; }
 .ago { display: grid; grid-template-columns: auto auto auto 1fr; gap: 2px 12px; margin-top: 10px; font-size: 16px; align-items: baseline; }
 .ago .lbl { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.ago .then { color: var(--flat); }
+.ago .then { color: var(--muted); }
 
 /* 차트 */
 .chart { margin-top: 18px; }
 .ranges { display: flex; gap: 4px; }
 .ranges button { flex: 1; min-height: 40px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; transition: background .16s, color .16s; }
 .ranges button:hover { color: var(--ink); }
-.ranges button[aria-selected=true] { background: var(--raise); color: var(--amber); }
+.ranges button[aria-selected=true] { background: var(--raise); color: var(--ink); box-shadow: inset 0 -2px 0 var(--amber); }
 .plot { position: relative; margin-top: 8px; touch-action: pan-y; cursor: crosshair; border-radius: 4px; }
 .plot > svg { display: block; width: 100%; height: 210px; overflow: visible; }
 .plot .grid { stroke: var(--line); stroke-width: 1; }
@@ -155,14 +166,17 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .plot-foot .mm { color: var(--flat); font-size: 15px; }
 
 /* 선수 목록 */
-.sorts { display: flex; align-items: center; gap: 2px; margin-right: -8px; }
+.sorts { display: flex; align-items: center; gap: 2px; margin-right: -8px; margin-left: auto; }
+.sorts .btn { white-space: nowrap; }
 .rows { border-top: 1px solid var(--line-strong); }
 .rows > li { border-bottom: 1px solid var(--line); }
 .rows > li.acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px; }
 .rows > li.acts > .btn { margin-top: 8px; }
 .p { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: "face id now" "face meta meta" "face d1 d1" "face d7 d7";
   gap: 3px 10px; padding: 12px 0; transition: background .16s; }
-a.p:hover { background: var(--panel); }
+.rows > li:not(.acts) > a.p { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+@media (hover: hover) { .q-main:hover, a.p:hover, .mv:hover { background: var(--panel); } }
+.q-main:active, a.p:active, .mv:active { background: var(--raise); }  /* 휴대폰 누름 반응 */
 .face { grid-area: face; width: 48px; height: 48px; object-fit: contain; object-position: bottom; background: var(--panel); border-radius: 8px; }
 .p-id { grid-area: id; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .p-meta { grid-area: meta; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -176,7 +190,7 @@ a.p:hover { background: var(--panel); }
 .p-d { display: grid; grid-template-columns: 44px 1fr 68px 84px; align-items: baseline; font-size: 15px; }
 .p-d.d1 { grid-area: d1; } .p-d.d7 { grid-area: d7; }
 .p-d .lbl { color: var(--muted); font-size: 12px; }
-.p-d .then { color: var(--flat); font-weight: 500; }
+.p-d .then { color: var(--muted); font-weight: 500; }
 .p-d .chg, .p-d .amt { justify-self: end; }
 .p-d .amt { font-weight: 500; }
 .p-act { grid-area: now; align-self: center; }
@@ -253,17 +267,17 @@ details.perm ol li::before { content: counter(s); position: absolute; left: 0; c
 .otabs + * { margin-top: 6px; }
 /* 경기 결과 칸 : 빨강, 파랑은 시세 등락 전용이라 승패는 명암으로만 구분 */
 .rc { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font: 700 12px/1 var(--sans); flex: none; }
-.rc.w { background: var(--ink); color: var(--board); }
-.rc.d { background: var(--raise); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.rc.l { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.rc.w { color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }  /* 흰 채움이 점수보다 먼저 보이지 않게 테두리로 */
+.rc.d { background: var(--raise); color: var(--muted); }
+.rc.l { color: var(--faint); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .form { display: inline-flex; gap: 3px; vertical-align: middle; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--amber); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 6px; line-height: 16px; }
 
 /* 오늘의 등락 */
-.movers { margin-top: 26px; }
-.movers h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0 0 8px; border-bottom: 1px solid var(--line-strong); }
+.movers { margin-top: 18px; }
+.movers h2 { display: flex; align-items: center; min-height: 46px; margin: 0 -16px; padding: 4px 16px; font-size: 15px; font-weight: 700; background: var(--panel); border-bottom: 1px solid var(--line-strong); }
 .mv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); transition: background .16s; }
-.mv:hover { background: var(--panel); }
+
 .mv small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mv-r { grid-column: 2; grid-row: 1 / span 2; display: grid; justify-items: end; gap: 1px; }
 .mv-r .num:first-child { font-size: 17px; }
@@ -291,8 +305,8 @@ details.perm ol li::before { content: counter(s); position: absolute; left: 0; c
 .srec { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 /* 상대전적 */
-.lg { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 64px; gap: 2px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.lg .rk { color: var(--faint); font: 600 15px var(--num); }
+.lg { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 64px; gap: 2px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.lg .rk { grid-row: 1 / span 2; align-self: start; color: var(--ink); font: 700 28px/1 var(--num); padding-top: 2px; }  /* 홈 순위 칸과 같은 모양 */
 a.lg { transition: background .16s; }
 a.lg:hover { background: var(--panel); }
 .lg b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -360,6 +374,8 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
 @media (min-width: 760px) {
   .mv-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
   .mv-pair > section { margin-top: 0; }
+  .mv-pair .mv, .mv-pair h2 { margin: 0; padding-left: 0; padding-right: 0; }  /* 두 칸일 때는 판 끝까지 늘리지 않음 */
+  .mv-pair h2 { padding: 4px 12px; }
   main { padding-bottom: 48px; }
   .ranges button { flex: none; padding: 0 20px; }
   .top { padding: 0 max(24px, calc((100vw - 728px) / 2)); }
@@ -382,10 +398,12 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
   .p { grid-template-columns: 48px minmax(0, 1fr) 100px 270px 270px; grid-template-areas: "face id now d1 d7" "face meta now d1 d7"; align-items: center; gap: 2px 20px; }
   .p-d { grid-template-columns: 44px 1fr 66px 86px; }
   .quote .big { font-size: 48px; }
-  .q-main { grid-template-columns: minmax(170px, 1fr) minmax(140px, 280px) 260px 240px; grid-template-areas: "name line val chg" "sub line val chg"; align-items: center; gap: 0 28px; padding: 16px 0; }
+  .q-main { grid-template-columns: 36px minmax(170px, 1fr) minmax(140px, 280px) 260px 240px; grid-template-areas: "rank name line val chg" "rank sub line val chg" "rank gap line val chg";
+    align-items: center; gap: 0 28px; padding-top: 16px; padding-bottom: 16px; }
+  .q-rank { grid-area: rank; align-self: center; } .q-gap { grid-area: gap; }
   .q-name { grid-area: name; } .q-sub { grid-area: sub; align-self: start; } .q-val { grid-area: val; } .q-chg { grid-area: chg; }
   .q-line { grid-area: line; margin: 0; height: 46px; }
-  .q-err { grid-column: 1 / -1; }
+  .q-err { grid-column: 2 / -1; }
 }
 @media (max-width: 400px) {
   .gt { grid-template-columns: minmax(0, 1fr) 84px 84px; }
@@ -571,7 +589,9 @@ function nearest(plot, clientX) {
 }
 
 // ---------- 화면 ----------
-const bigPrice = now => `<div class="big num" data-roll="big">${full(now)}${now ? '<small>BP</small>' : ''}</div>`;
+// 현재가도 1일 등락색으로 칠함 (국내 증권 앱 관례, 사용자 선택 2026-11-19). 기준은 move() 와 같은 0.05%
+const tone = (now, base) => { if (!now || !base) return ''; const p = (now - base) / base * 100; return p > 0.049 ? 'up' : p < -0.049 ? 'down' : ''; };
+const bigPrice = (now, base) => `<div class="big num ${tone(now, base)}" data-roll="big">${full(now)}${now ? '<small>BP</small>' : ''}</div>`;
 function agoBlock(now, d1, d7) {
   const [p1, a1] = move(now, d1, full), [p7, a7] = move(now, d7, full);
   return `<div class="ago"><span class="lbl">1일 전</span><span class="then num">${d1 ? full(d1) : '-'}</span>${p1}${a1}
@@ -582,7 +602,7 @@ function playerRow(p, extra = '', add = chemSolo(p.grade), ctx = '') {
     return `<span class="p-d ${cls}"><span class="lbl">${days}일 전</span><span class="then num">${p.hist.length ? compact(then) : '-'}</span>${pc}${amt}</span>`; };
   return `<li><a class="p" href="#/p/${p.spid}/${p.grade}${ctx}">${face(p)}
     <span class="p-id">${ident(p)}</span><span class="p-meta">${rating(p, add)}${payTag(p.pay)}</span>
-    <span class="p-now num" data-roll="${key(p)}">${compact(p.now)}</span>
+    <span class="p-now num ${p.hist.length ? tone(p.now, ago(p, 1)) : ''}" data-roll="${key(p)}">${compact(p.now)}</span>
     ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`.replace('<li>', extra ? '<li class="acts">' : '<li>');
 }
 const SLOT = { LCB: 'CB', RCB: 'CB', LCM: 'CM', RCM: 'CM', LDM: 'CDM', RDM: 'CDM', LAM: 'CAM', RAM: 'CAM', LS: 'ST', RS: 'ST', LF: 'CF', RF: 'CF' };
@@ -603,16 +623,21 @@ function playerList(players, team, ctx, title) {
 function viewHome() {
   const teams = S.owners.map(o => team(o.players)), rel = t => [...t.hist, t.now].map((v, _, h) => v / h[0]);
   const span = Math.max(.01, ...teams.filter(t => t.n).map(t => Math.max(...rel(t)) - Math.min(...rel(t))));  // 가장 크게 움직인 구단의 폭을 공통 눈금으로
+  // 순위 : 지금 가치 순, 어제 순위와 비교해 변동 표시. 보이는 순서는 사용자가 정한 순서 그대로
+  const rank = val => Object.fromEntries(S.owners.map((o, i) => i).filter(i => teams[i].n).sort((a, b) => val(teams[b]) - val(teams[a])).map((i, r) => [i, r + 1]));
+  const rNow = rank(t => t.now), rThen = rank(t => t.d1 || t.now), top = Math.max(...teams.filter(t => t.n).map(t => t.now));
   const rows = orderOf().map((o, at, all) => {
-    const t = teams[o.i], [p1, a1] = move(t.now, t.d1), [p7, a7] = move(t.now, t.d7);
+    const t = teams[o.i], [p1, a1] = move(t.now, t.d1), [p7, a7] = move(t.now, t.d7), r = rNow[o.i], dr = r ? rThen[o.i] - r : 0;
     const h = t.n ? rel(t) : [], mid = (Math.max(...h) + Math.min(...h)) / 2;
-    const line = h.length > 2 ? `<svg class="q-line" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path d="${
+    const line = h.length > 2 ? `<svg class="q-line ${tone(h.at(-1), h[0]) || 'flat'}" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path d="${
       h.map((v, i) => `${i ? 'L' : 'M'}${(i / (h.length - 1) * 100).toFixed(2)} ${(17 - (v - mid) / span * 28).toFixed(2)}`).join('')}"/></svg>` : '';
     return `<li class="q"><a class="q-main" href="#/o/${o.i}">
+        <span class="q-rank">${r ? `<b><span class="sr">가치 순위 </span>${r}</b>${dr ? `<span class="chg num ${dr > 0 ? 'up' : 'down'}"><svg><use href="#i-tri"/></svg>${Math.abs(dr)}<span class="sr">계단 ${dr > 0 ? '오름' : '내림'}</span></span>` : ''}` : ''}</span>
         <span class="q-name">${esc(o.nick)}</span>
-        <span class="q-val num" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
+        <span class="q-val num ${tone(t.now, t.d1)}" data-roll="team${o.i}">${t.n ? full(t.now) : '<span class="na">명단 없음</span>'}</span>
         <span class="q-sub">${o.official?.length ? `${o.div ? `<span>${esc(o.div)},</span> ` : ''}<span>최근 ${o.official.length}경기 ${(([w, d, l]) => `${w}승 ${d}무 ${l}패`)(tally(o.official.map(m => m.r)))}</span>` : o.players.length ? `선수 ${o.players.length}명` : '최근 경기 기록 없음'}</span>
         <span class="q-chg"><span class="lbl">1일</span>${p1}${a1 || '<span></span>'}<span class="lbl">7일</span>${p7}${a7 || '<span></span>'}</span>
+        ${r > 1 ? `<span class="q-gap">1위와 <span class="num">${compact(top - t.now)}</span> 차이</span>` : ''}
         ${o.error ? `<span class="q-err">${esc(o.error)}</span>` : ''}${line}</a>
       ${ui.edit ? `<span class="q-move"><button class="btn" data-move="-1" data-nick="${esc(o.nick)}" ${at ? '' : 'disabled'} aria-label="${esc(o.nick)} 위로"><svg class="ico"><use href="#i-upw"/></svg></button>
         <button class="btn" data-move="1" data-nick="${esc(o.nick)}" ${at < all.length - 1 ? '' : 'disabled'} aria-label="${esc(o.nick)} 아래로"><svg class="ico"><use href="#i-dnw"/></svg></button></span>` : ''}</li>`;
@@ -640,7 +665,7 @@ function viewOwner(i, tab, season) {
   const tabs = [['players', `선수 시세`, o.players.length], ['off', '공식경기', ''], ['watch', '관심선수', w.length]];
   const top = `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
-    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
+    ${t.n ? `<div class="quote">${bigPrice(t.now, t.d1)}${agoBlock(t.now, t.d1, t.d7)}
       ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}
       ${payLine(o.players)}</div>`
       : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
@@ -700,7 +725,7 @@ function viewPlayer(spid, grade, ctx) {
   const facts = [['급여', f.pay], ['키', f.height], ['몸무게', f.weight], ['체형', f.body], ['주발', f.foot], ['개인기', f.skill ? f.skill + '성' : ''],
                  ['명성', f.fame], ['국적', f.nation], ['소속', f.team], ['생년월일', f.birth]].filter(x => x[1]);
   return `<div class="head">${back}<h1>${ident(d)}</h1></div>
-    <div class="who quote"><div>${bigPrice(d.now)}
+    <div class="who quote"><div>${bigPrice(d.now, d.hist.length ? ago(d, 1) : 0)}
       ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v + add}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
       ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
     ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
@@ -1007,7 +1032,7 @@ function viewFind(q) {
   const recent = LS.get('recentFind', []);
   const form = `<div class="bar"><h1>구단 검색</h1></div>
     <form class="find" data-club><input class="field" id="club" type="search" value="${esc(q)}" placeholder="구단주 닉네임" autocomplete="off" enterkeyhint="search" aria-label="구단주 닉네임"><button class="btn go">찾기</button></form>
-    ${!q && recent.length ? `<div class="recent">${recent.map(n => `<a class="btn" href="#/find/${encodeURIComponent(n)}">${esc(n)}</a>`).join('')}</div>` : ''}`;
+    ${!q ? `<div class="recent">${[...new Set([...recent, ...S.owners.map(o => o.nick)])].slice(0, 8).map(n => `<a class="btn" href="#/find/${encodeURIComponent(n)}">${esc(n)}</a>`).join('')}</div>` : ''}`;  // 첫 화면이 비지 않게 우리 구단주도
   if (!q) return form;
   lookup(q); loadNames();
   const f = found2[q];
@@ -1017,9 +1042,9 @@ function viewFind(q) {
   const ps = d.players.map(p => ({ ...p, name: name(p.spid), season: season(p.spid)[0] || '', seasonImg: season(p.spid)[1] || '', hist: [] }));
   const now = ps.reduce((a, p) => a + (p.now || 0), 0), d1 = ps.reduce((a, p) => a + (p.d1 ?? p.now ?? 0), 0), d7 = ps.reduce((a, p) => a + (p.d7 ?? p.now ?? 0), 0);
   const row = p => { const [pc, amt] = move(p.now, p.d1);
-    return `<li class="fp">${face(p)}<span class="p-id">${ident(p)}</span><span class="p-meta"><span class="pos">${esc(p.pos)}</span>${payTag(p.pay)}</span><span class="p-now num">${compact(p.now)}</span><span class="fp-d">${p.d1 ? `${pc} ${amt}` : ''}</span></li>`; };
+    return `<li class="fp">${face(p)}<span class="p-id">${ident(p)}</span><span class="p-meta"><span class="pos">${esc(p.pos)}</span>${payTag(p.pay)}</span><span class="p-now num ${tone(p.now, p.d1)}">${compact(p.now)}</span><span class="fp-d">${p.d1 ? `${pc} ${amt}` : ''}</span></li>`; };
   return form + `<h2 class="fname">${esc(d.nick)}</h2>
-    <div class="quote">${bigPrice(now)}${agoBlock(now, d1, d7)}
+    <div class="quote">${bigPrice(now, d1)}${agoBlock(now, d1, d7)}
       <div class="ofform">${d.div ? `<span>${esc(d.div)}</span>` : ''}<span>${esc(d.mode)} ${mdate(d.match)}, ${esc(d.opp || '')} 상대 ${d.score[0] ?? '-'} : ${d.score[1] ?? '-'} ${esc(d.result || '')}</span></div>
     ${payLine(ps)}</div>
     <div class="bar"><h2>최근 ${esc(d.mode)} 명단 ${ps.length}명</h2></div>
@@ -1034,7 +1059,7 @@ function movers() {
   const list = Object.values(seen).map(x => ({ ...x, r: x.p.now / ago(x.p, 1) - 1, a: x.p.now - ago(x.p, 1) })).filter(x => Math.abs(x.r) >= .0005);
   const row = ({ p, who }) => { const [pc, amt] = move(p.now, ago(p, 1));
     return `<li><a class="mv" href="#/p/${p.spid}/${p.grade}/o${who[0].i}"><span class="p-id">${ident(p)}</span><small>${payTag(p.pay)}${who.map(o => esc(o.nick)).join(', ')}</small>
-      <span class="mv-r"><span class="num">${compact(p.now)}</span><span>${pc} ${amt}</span></span></a></li>`; };
+      <span class="mv-r"><span class="num ${tone(p.now, ago(p, 1))}">${compact(p.now)}</span><span>${pc} ${amt}</span></span></a></li>`; };
   const up = list.filter(x => x.a > 0).sort((a, b) => b.a - a.a).slice(0, 3), down = list.filter(x => x.a < 0).sort((a, b) => a.a - b.a).slice(0, 3);  // 금액순
   if (!up.length && !down.length) return '';
   return `<div class="mv-pair">${[['어제보다 많이 오른 선수', up], ['어제보다 많이 내린 선수', down]].map(([h, l]) => `<section class="movers"><h2>${h}</h2>
