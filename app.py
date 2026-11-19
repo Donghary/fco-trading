@@ -31,6 +31,7 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "Donghary/fco-trading")  # 관심선�
 REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 .github/workflows/update.yml
 SQUAD_MIN = 25  # 명단과 경기 목록 갱신 주기(분). 서비스 단계 키라 매 실행(30분)마다 확인
 INTRA_DAYS = 7  # 시간대별 시세 보관 기간(일)
+PAY_PER_RUN = 400  # 공식경기 상대 선수 급여를 실행당 몇 명까지 새로 받을지
 INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
 MATCH_PER_RUN = 600  # 한 번에 받을 경기 상세 수. 한도에 걸리면 그 실행은 멈추고 다음 실행에서 이어 받음
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
@@ -222,7 +223,7 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -266,7 +267,7 @@ def card(spid, grade, pos=None, price=None):
         "now": price and price["now"], "hist": price["daily"][-30:] if price else [],
         # 포지션별 오버롤 : 강화 단계와 적응도 5 반영, 팀컬러 제외
         "positions": STATE["info"].get(f"{spid}_{grade}", {}).get("positions", []),
-        "pay": int(STATE["info"].get(f"{spid}_{grade}", {}).get("pay") or 0) or None,  # 급여. 선발 11명 합계 상한 315 (사용자 기준)
+        "pay": STATE["pay"].get(str(spid)),  # 급여. 강화와 무관하게 카드마다 고정. 선발 11명 합계 상한 315 (사용자 기준)
     }
 
 
@@ -301,7 +302,7 @@ def official_rows(nick, ids, goals=False):
             row.update(poss=me["poss"], sh=[me["sh"], op["sh"]], sot=[me["sot"], op["sot"]],
                        mg=[named(g) for g in me["goals"]], og2=[named(g) for g in op["goals"]], ov=op.get("ov"),
                        olu=[[NAMES.get(q[0], str(q[0])), q[1], POSITIONS.get(q[2], ""), q[3] if len(q) > 3 else None,
-                             SEASONS.get(q[0] // 1000000, {}).get("seasonImg")] for q in op.get("lu", [])] if "ov" in op else None)
+                             SEASONS.get(q[0] // 1000000, {}).get("seasonImg"), STATE["pay"].get(str(q[0]))] for q in op.get("lu", [])] if "ov" in op else None)
         rows.append(row)
     return sorted(rows, key=lambda r: r["d"], reverse=True)
 
@@ -383,6 +384,25 @@ def official_of(nick, s, league=()):
     """구단주의 최근 공식경기 요약 : 경기별 결과와 가장 최근 경기의 등급. 리그 경기는 공식경기 전적이 아니라 뺌"""
     rows = [r for r in official_rows(nick, s.get("official", [])) if r["s"] not in league]
     return {"official": rows, "div": rows[0]["div"] if rows else ""}
+
+
+def fill_pay(limit=PAY_PER_RUN):
+    """급여 캐시 STATE["pay"] = {spid: 급여}. 우리 선수는 이미 받은 능력치에서, 공식경기 상대 선수는 데이터센터에서 실행당 조금씩"""
+    for k, info in STATE["info"].items():
+        if info.get("pay"):
+            STATE["pay"][k.split("_")[0]] = int(info["pay"])
+    todo = sorted({q[0] for r in STATE["matches"].values() if r.get("type") == 50 for side in r["p"] for q in side.get("lu", [])
+                   if str(q[0]) not in STATE["pay"]}, reverse=True)
+    for spid in todo[:limit]:
+        try:
+            pay = parse_info(datacenter("PlayerAbility", spid, 1))["pay"]
+        except Exception as e:
+            print("급여 조회 실패", spid, e, file=sys.stderr)
+            break  # 막혔으면 다음 실행 때 이어서
+        if pay:
+            STATE["pay"][str(spid)] = int(pay)
+        time.sleep(0.1)
+    return max(0, len(todo) - limit)
 
 
 def value_opponents(prices):
@@ -483,6 +503,13 @@ def build():
     except Exception as e:
         print("상대 구단 가치 실패", e, file=sys.stderr)
 
+    try:
+        left = fill_pay()
+        if left:
+            print("상대 선수 급여", left, "명은 다음 갱신 때 받음")
+    except Exception as e:
+        print("급여 채우기 실패", e, file=sys.stderr)
+
     for n, s in squads.items():  # 실제 구단 가치 : 명단의 모든 선수 시세를 받았을 때만 기록
         ks = [(p["spid"], p["grade"]) for p in s["players"]]
         if ks and all(k in prices for k in ks):
@@ -521,7 +548,7 @@ def build():
     for spid, name in NAMES.items():
         players.setdefault(spid % 1000000, [name, []])[1].append(spid // 1000000)
     write("names.json", {"players": players, "seasons": {
-        i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}})
+        i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}, "pay": STATE["pay"]})
     for name in ("index.html", "favicon.png", "icon-180.png", "icon-192.png", "icon-512.png", "manifest.json", "lock.json"):
         if (ROOT / name).exists():
             (SITE / name).write_bytes((ROOT / name).read_bytes())

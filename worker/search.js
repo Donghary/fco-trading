@@ -3,6 +3,7 @@
 // 넥슨 키는 Worker 비밀값(NEXON_API_KEY)에만 두고 페이지에는 노출하지 않음
 const API = 'https://open.api.nexon.com/fconline/v1/';
 const PRICE = 'https://fconline.nexon.com/datacenter/PlayerPriceGraph';
+const ABILITY = 'https://fconline.nexon.com/datacenter/PlayerAbility';
 const DIVISIONS = { 800: '슈퍼 챔피언스', 900: '챔피언스', 1000: '슈퍼 챌린지', 1100: '챌린저1', 1200: '챌린저2', 1300: '챌린저3', 1700: '마스터1', 1800: '마스터2',
   1900: '마스터3', 2000: '월드클래스1', 2100: '월드클래스2', 2200: '월드클래스3', 2300: '프로1', 2400: '프로2', 2500: '프로3', 2600: '세미프로1', 2700: '세미프로2',
   2800: '세미프로3', 2900: '유망주1', 3000: '유망주2', 3100: '유망주3' };
@@ -26,6 +27,15 @@ async function price(spid, grade) {  // 데이터센터 시세 페이지에서 �
   return { now: now ? +now[1].replace(/,/g, '') : 0, d1: daily.at(-1) ?? null, d7: daily.at(-7) ?? null };
 }
 
+async function pay(spid) {  // 급여 : 강화와 무관하게 카드마다 고정. 능력치 페이지의 pay_side 값
+  try {
+    const r = await fetch(ABILITY, { method: 'POST', body: `spid=${spid}&n1strong=1`,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' } });
+    const m = (await r.text()).match(/class="pay_side">\s*(\d+)/);
+    return m ? +m[1] : null;
+  } catch { return null; }
+}
+
 async function club(env, nick) {
   const { ouid } = await nexon(env, `id?nickname=${encodeURIComponent(nick)}`);
   const ids = [...await nexon(env, `user/match?ouid=${ouid}&matchtype=50&offset=0&limit=1`), ...await nexon(env, `user/match?ouid=${ouid}&matchtype=52&offset=0&limit=1`)];
@@ -33,7 +43,7 @@ async function club(env, nick) {
   const details = await Promise.all(ids.map(id => nexon(env, `match-detail?matchid=${id}`)));
   const latest = details.sort((a, b) => b.matchDate.localeCompare(a.matchDate))[0];
   const me = latest.matchInfo.find(i => i.ouid === ouid), op = latest.matchInfo.find(i => i.ouid !== ouid);
-  const players = await Promise.all(me.player.map(async p => ({ spid: p.spId, grade: p.spGrade, pos: POS[p.spPosition] || '', ...await price(p.spId, p.spGrade) })));
+  const players = await Promise.all(me.player.map(async p => ({ spid: p.spId, grade: p.spGrade, pos: POS[p.spPosition] || '', pay: await pay(p.spId), ...await price(p.spId, p.spGrade) })));
   return {
     nick: me.nickname, match: latest.matchDate, mode: latest.matchType === 50 ? '공식경기' : '감독모드',
     div: latest.matchType === 50 ? DIVISIONS[me.division] || '' : '', result: me.matchDetail?.matchResult, score: [me.shoot?.goalTotal, op?.shoot?.goalTotal], opp: op?.nickname,
