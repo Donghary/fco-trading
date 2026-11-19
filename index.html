@@ -584,7 +584,8 @@ function rating(p, add) {
   if (!v) return p.pos ? `<span class="pos">${esc(p.pos)}</span>` : '';
   return `<span class="pos">${esc(hit ? p.pos : pos)}</span><span class="ovr-n num"><span class="sr">오버롤 </span>${v + add}</span>${p.pos === 'SUB' ? '<span class="pos">SUB</span>' : ''}`;
 }
-const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? p.now / ago(p, 1) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? p.now / ago(p, 7) : -1] };
+// 등락순은 퍼센트가 아니라 금액 크기순 (오르든 내리든 많이 움직인 금액이 위로). 50억이 3억 빠진 게 1천만이 500만 빠진 것보다 큼 (사용자 기준)
+const SORTS = { now: ['현재가', p => p.now || 0], d1: ['1일 등락', p => p.now && p.hist.length ? Math.abs(p.now - ago(p, 1)) : -1], d7: ['7일 등락', p => p.now && p.hist.length ? Math.abs(p.now - ago(p, 7)) : -1] };
 function playerList(players, team, ctx, title) {
   const f = SORTS[ui.sort][1];
   return `<div class="bar"><h2>${title || `선수 ${players.length}명`}</h2><div class="sorts" role="group" aria-label="정렬">${Object.entries(SORTS).map(([k, [label]]) =>
@@ -1041,11 +1042,11 @@ function viewFind(q) {
 function movers() {
   const seen = {};
   orderOf().forEach(o => o.players.forEach(p => { if (p.now >= 1e7 && p.hist.length) (seen[key(p)] ??= { p, who: [] }).who.push(o); }));
-  const list = Object.values(seen).map(x => ({ ...x, r: x.p.now / ago(x.p, 1) - 1 })).filter(x => Math.abs(x.r) >= .0005);
+  const list = Object.values(seen).map(x => ({ ...x, r: x.p.now / ago(x.p, 1) - 1, a: x.p.now - ago(x.p, 1) })).filter(x => Math.abs(x.r) >= .0005);
   const row = ({ p, who }) => { const [pc, amt] = move(p.now, ago(p, 1));
     return `<li><a class="mv" href="#/p/${p.spid}/${p.grade}/o${who[0].i}"><span class="p-id">${ident(p)}</span><small>${payTag(p.pay)}${who.map(o => esc(o.nick)).join(', ')}</small>
       <span class="mv-r"><span class="num">${compact(p.now)}</span><span>${pc} ${amt}</span></span></a></li>`; };
-  const up = list.filter(x => x.r > 0).sort((a, b) => b.r - a.r).slice(0, 3), down = list.filter(x => x.r < 0).sort((a, b) => a.r - b.r).slice(0, 3);
+  const up = list.filter(x => x.a > 0).sort((a, b) => b.a - a.a).slice(0, 3), down = list.filter(x => x.a < 0).sort((a, b) => a.a - b.a).slice(0, 3);  // 금액순
   if (!up.length && !down.length) return '';
   return `<div class="mv-pair">${[['어제보다 많이 오른 선수', up], ['어제보다 많이 내린 선수', down]].map(([h, l]) => `<section class="movers"><h2>${h}</h2>
     ${l.length ? `<ol>${l.map(row).join('')}</ol>` : '<p class="note">해당 선수 없음</p>'}</section>`).join('')}</div>
