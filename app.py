@@ -135,7 +135,10 @@ def refresh_matches():
         if not isinstance(STATE[k], list):
             STATE[k] = list(owners) if STATE[k] else []
     # 새 구단주가 있으면 1대1 목록은 전원을 끝까지 넘김 : 새 사람과 기존 사람의 옛 경기도 양쪽 목록에 다 보여야 상대전적으로 잡힘
-    first = bool(set(owners) - set(STATE["seeded"]))
+    # 갱신이 3시간 넘게 끊겼다 이어져도(점검, 장애) 전원을 끝까지 넘김 : 짧은 목록(30건)만 보면 그 사이 경기가 빠짐.
+    # m_at 은 배포된 실행에서만 저장되므로 끊긴 시간이 그대로 반영됨
+    gap = time.time() - STATE["m_at"] > 3 * 3600
+    first = bool(set(owners) - set(STATE["seeded"])) or gap
     listing = first or time.time() - STATE["m_at"] >= SQUAD_MIN * 60
     seen = {}
     for n, o in owners.items() if listing else []:
@@ -149,7 +152,7 @@ def refresh_matches():
     if listing:
         STATE["m_at"] = time.time()
     for n, o in owners.items():  # 공식경기 목록 : 구단주마다 처음 한 번만 30일 치 전부. 이후는 명단 갱신 때 같이 받음
-        if n in STATE["off_seeded"]:
+        if n in STATE["off_seeded"] and not gap:
             continue
         got = []
         for off in range(0, 1000, 100):
@@ -173,7 +176,7 @@ def refresh_matches():
             print("경기 상세 실패", m, e, file=sys.stderr)
             if "429" in str(e):
                 break  # 한도에 걸리면 이번 실행은 여기까지
-    left = todo[done:]
+    left = [m for m in todo if m not in cache or old(cache[m])]  # 실패했거나 아직 못 받은 것 전부 (성공 수로 자르면 실패한 id 가 빠짐)
     keep = set(recent) | {m for ids in STATE["off"].values() for m in ids}
     STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or m in keep}
     STATE["off"] = {n: [m for m in ids if m in STATE["matches"] or m in left] for n, ids in STATE["off"].items()}
@@ -233,7 +236,7 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -248,8 +251,10 @@ def load_state():
     except FileNotFoundError:
         return
     except urllib.error.HTTPError as e:
-        if e.code != 404:
-            raise  # 일시 오류면 중단함. 빈 상태로 덮어써 쌓인 기록을 날리지 않기 위함
+        # 404 도 중단함 : Pages 장애나 설정 변경 때 빈 상태로 시작해 쌓인 기록을 덮어쓰지 않기 위함.
+        # 정말 처음부터 시작할 때만 FRESH=1 로 실행 (워크플로 수동 실행)
+        if e.code != 404 or not os.environ.get("FRESH"):
+            raise
         return
     for k, v in json.loads(raw).items():
         if k in STATE:
@@ -277,7 +282,7 @@ def card(spid, grade, pos=None, price=None):
         "now": price and price["now"], "hist": price["daily"][-30:] if price else [],
         # 포지션별 오버롤 : 강화 단계와 적응도 5 반영, 팀컬러 제외
         "positions": STATE["info"].get(f"{spid}_{grade}", {}).get("positions", []),
-        "pay": STATE["pay"].get(str(spid)),  # 급여. 강화와 무관하게 카드마다 고정. 선발 11명 합계 상한 315 (사용자 기준)
+        "pay": STATE["pay"].get(str(spid)) or None,  # 급여. 강화와 무관하게 카드마다 고정. 선발 11명 합계 상한 315 (사용자 기준)
     }
 
 
@@ -405,12 +410,12 @@ def fill_pay(limit=PAY_PER_RUN):
                    if str(q[0]) not in STATE["pay"]}, reverse=True)
     for spid in todo[:limit]:
         try:
-            pay = parse_info(datacenter("PlayerAbility", spid, 1))["pay"]
+            info = parse_info(datacenter("PlayerAbility", spid, 1))
         except Exception as e:
             print("급여 조회 실패", spid, e, file=sys.stderr)
             break  # 막혔으면 다음 실행 때 이어서
-        if pay:
-            STATE["pay"][str(spid)] = int(pay)
+        if info["pay"] or info["positions"]:  # 정상 페이지인데 급여가 없으면 0 으로 적어 다시 묻지 않음
+            STATE["pay"][str(spid)] = int(info["pay"] or 0)
         time.sleep(0.1)
     return max(0, len(todo) - limit)
 
@@ -456,9 +461,9 @@ def write(name, obj):
 def build():
     load_state()
     seed = ROOT / "seed_matches.json"  # 로컬에서 미리 받아 둔 경기 상세. 넥슨 일일 한도를 아끼려고 처음 한 번만 씀
-    if seed.exists() and not STATE["seeded"]:
+    if seed.exists() and not STATE["seed_used"] and not STATE["seeded"]:  # 완전히 빈 상태에서만 한 번 (seeded 는 구단주 목록이라 따로 표시)
         STATE["matches"].update(json.loads(seed.read_text()))
-        STATE["seeded"] = True
+        STATE["seed_used"] = True
     now = int(time.time())
 
     squads = STATE["squads"] = {n: STATE["squads"].get(n) or {"players": [], "match": None, "at": 0} for n in OWNERS}
@@ -497,10 +502,12 @@ def build():
         except Exception as e:
             print("데이터센터 조회 실패", k, e, file=sys.stderr)
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
-    if keys and not prices:
+    if keys and not any(p["now"] for p in prices.values()):  # 하나도 못 받았거나 전부 0 (페이지 구조가 바뀐 경우)
         # 목요일 패치 점검 등으로 데이터센터가 막힘(403). 점검 중엔 거래도 없으니 배포를 건너뛰고 이전 페이지를 그대로 둠.
         # 실패로 끝내지 않음 : 점검 내내 실패 메일이 쌓이지 않게 함
         print("시세를 하나도 받지 못함 (넥슨 점검 추정). 이번 배포는 건너뜀", file=sys.stderr)
+        if STATE["ok_at"] and now - STATE["ok_at"] > 14 * 3600:  # 목요일 점검(길면 11시간 안팎)보다 길면 고장일 수 있음 : 실패로 끝내 메일이 오게 함
+            raise RuntimeError(f"데이터센터에서 시세를 {(now - STATE['ok_at']) // 3600}시간째 받지 못함. 페이지 구조 변경이나 차단 확인 필요")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 f.write("skip=true\n")
@@ -531,6 +538,7 @@ def build():
     STATE["intra"] = {k: [p for p in v if p[0] >= cutoff] for k, v in STATE["intra"].items()}
     STATE["intra"] = {k: v for k, v in STATE["intra"].items() if v}
 
+    STATE["ok_at"] = now
     write("state.json", STATE)
     league = season_split()[2]
     write("data.json", {
@@ -539,7 +547,6 @@ def build():
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
         "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
-        "lock": (ROOT / "lock.json").exists(),  # 친구용 편집 비밀번호가 정해졌는지
     })
     write("values.json", STATE["value"])
     write_official()
@@ -559,7 +566,7 @@ def build():
         players.setdefault(spid % 1000000, [name, []])[1].append(spid // 1000000)
     write("names.json", {"players": players, "seasons": {
         i: [s["className"].split(" (")[0], s["seasonImg"]] for i, s in SEASONS.items()}, "pay": STATE["pay"]})
-    for name in ("index.html", "favicon.png", "icon-180.png", "icon-192.png", "icon-512.png", "manifest.json", "lock.json"):
+    for name in ("index.html", "favicon.png", "icon-180.png", "icon-192.png", "icon-512.png", "manifest.json"):
         if (ROOT / name).exists():
             (SITE / name).write_bytes((ROOT / name).read_bytes())
     print(time.strftime("%H:%M"), "생성 완료 : 시세", len(prices), "건")

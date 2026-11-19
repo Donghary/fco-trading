@@ -31,9 +31,13 @@ Data based on NEXON Open API.
 | 생성 | `.github/workflows/update.yml` 이 `python3 app.py build` 실행 |
 | 이어받기 | 직전 배포본의 `state.json`(시간대별 시세, 경기 기록, 급여 캐시)을 받아 이어 씀 |
 | 배포 | `site/` 를 GitHub Pages 로 올림 |
-| 보조 | GitHub 자체 예약(매시 5분), 수동 실행, main 푸시 |
+| 백업 | 배포할 때마다 `state.json` 을 Actions 실행 결과물로 따로 남김 (7일 보관) |
+| 보조 | GitHub 자체 예약(매시 20분), 수동 실행, main 푸시 |
 
-- 넥슨 점검(주로 목요일 패치) 중에는 데이터센터가 403 으로 막힘. 시세를 하나도 못 받으면 배포를 건너뛰고 성공으로 끝냄. 이전 페이지가 그대로 보이고 실패 메일은 오지 않음
+- 넥슨 점검(주로 목요일 패치) 중에는 데이터센터가 403 으로 막힘. 시세를 하나도 못 받으면(전부 0 포함) 배포를 건너뛰고 성공으로 끝냄. 이전 페이지가 그대로 보이고 실패 메일은 오지 않음
+- 단, 마지막 성공에서 14시간이 넘으면 점검이 아니라 고장(페이지 구조 변경, 차단)일 수 있으므로 실패로 끝내 메일이 오게 함
+- 갱신이 3시간 넘게 끊겼다 이어지면 구단주 전원의 경기 목록을 처음부터 끝까지 다시 넘겨, 그 사이 경기를 빠짐없이 받음
+- 직전 `state.json` 을 받지 못하면(404 포함) 그 실행은 중단함. 빈 상태로 덮어써 기록을 날리지 않기 위함. 정말 처음부터 시작할 때만 Actions 수동 실행에서 `fresh` 를 켬
 - 넥슨 오픈 API 경기 기록은 최근 약 30일만 받을 수 있음. 받은 기록은 `state.json` 에 계속 쌓음
 
 ## 3. 데이터 출처
@@ -69,10 +73,9 @@ Data based on NEXON Open API.
 | `index.html` | 화면 전체 (HTML, CSS, JS 한 파일, 의존성 없음) |
 | `watchlist.json` | 구단주별 관심선수 `{구단주: [{spid, grade}]}`. 페이지에서 저장하면 이 파일이 커밋됨 |
 | `baselines.json` | 게임 안에서 확인한 통산 전적 출발점 (아래 6.) |
-| `lock.json` | 관심선수 저장용 GitHub 토큰을 비밀번호로 암호화한 값 |
 | `seed_matches.json` | 처음 한 번 쓰는 경기 상세 묶음 |
 | `manifest.json`, `icon-*.png`, `favicon.png` | 홈 화면 설치용 |
-| `worker/search.js`, `worker/wrangler.toml` | 구단 검색 중계와 30분 예약 (Cloudflare Worker) |
+| `worker/search.js`, `worker/wrangler.toml` | 구단 검색, 관심선수 저장, 30분 예약 (Cloudflare Worker) |
 | `.github/workflows/update.yml` | 생성과 배포 |
 
 ## 6. 통산 전적 출발점 (`baselines.json`)
@@ -91,10 +94,10 @@ Data based on NEXON Open API.
 
 ## 7. 관심선수 저장
 
-- 페이지에서 비밀번호를 넣으면 그 기기에서 저장 가능
-- 비밀번호로 `lock.json` 의 토큰을 풀어 `watchlist.json` 을 GitHub 에 직접 커밋함
-- 토큰 : fine-grained, 이 저장소만, Contents 쓰기. 같은 토큰을 Worker 비밀값 `GH_TOKEN` 으로도 씀
-- 토큰을 바꾸면 `lock.json` 과 Worker `GH_TOKEN` 을 함께 바꿔야 함 (안 바꾸면 저장과 자동 갱신이 같이 멈춤)
+- 페이지에서 비밀번호를 한 번 넣으면 그 기기에서 저장 가능
+- 저장은 Worker 의 `POST /watch` 가 맡음 : 비밀번호 확인(같은 IP 10분에 8번까지 틀릴 수 있음), 구단주와 선수 값 검사 후 `watchlist.json` 을 커밋함
+- 브라우저에는 GitHub 토큰이 없음. 비밀번호는 Worker 비밀값 `WATCH_PASS` 에만 있음
+- 비밀번호 바꾸기 : worker 폴더에서 `npx wrangler@3.99.0 secret put WATCH_PASS`
 
 ## 8. 구단주 추가
 
@@ -108,9 +111,11 @@ Data based on NEXON Open API.
 | 이름 | 위치 | 용도 |
 |---|---|---|
 | `NEXON_API_KEY` | GitHub 저장소 비밀값, Worker 비밀값, 로컬 `api_key.txt` | 넥슨 오픈 API |
-| `GH_TOKEN` | Worker 비밀값 | 30분 예약 갱신 요청 |
+| `GH_TOKEN` | Worker 비밀값 | 30분 예약 갱신 요청, 관심선수 저장 커밋 (fine-grained, 이 저장소만, Contents 쓰기) |
+| `WATCH_PASS` | Worker 비밀값 | 관심선수 저장 비밀번호 |
 
 - 넥슨 키를 바꾸면 GitHub 비밀값과 Worker 비밀값을 둘 다 바꿈
+- `GH_TOKEN` 이 만료되면 자동 갱신과 관심선수 저장이 같이 멈춤. 새 토큰을 `npx wrangler@3.99.0 secret put GH_TOKEN` 으로 넣음
 - `api_key.txt`, `worker/.dev.vars`, `worker/.gh_token` 은 `.gitignore` 대상이라 올라가지 않음
 
 ## 10. 로컬 실행

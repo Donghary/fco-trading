@@ -4,8 +4,13 @@ on:
   repository_dispatch:
     types: [refresh]  # 주 수단 : Cloudflare Worker 가 매시 5분, 35분에 요청 (worker/search.js 의 scheduled)
   schedule:
-    - cron: "5 * * * *"  # 보조 수단. GitHub 예약은 자주 밀리거나 건너뜀
+    - cron: "20 * * * *"  # 보조 수단. GitHub 예약은 자주 밀리거나 건너뜀. Cloudflare(5분, 35분)와 겹치지 않게 20분
   workflow_dispatch:
+    inputs:
+      fresh:
+        description: "이전 기록 없이 처음부터 시작 (state.json 이 정말 없을 때만)"
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -30,6 +35,14 @@ jobs:
         run: python3 app.py build
         env:
           NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          FRESH: ${{ inputs.fresh && '1' || '' }}
+      # 쌓인 기록의 유일한 사본이 배포본이라 실행마다 백업을 따로 남김 (7일 보관, Actions 실행 화면에서 받을 수 있음)
+      - if: steps.build.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: state
+          path: site/state.json
+          retention-days: 7
       # 넥슨 점검 중이면 build 가 skip=true 를 남김 → 배포하지 않고 이전 페이지 유지
       - if: steps.build.outputs.skip != 'true'
         uses: actions/upload-pages-artifact@v3

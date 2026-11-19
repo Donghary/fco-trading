@@ -432,6 +432,7 @@ const LS = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
+try { localStorage.removeItem('token'); localStorage.removeItem('pinged'); } catch {}  // 예전 방식(브라우저에 GitHub 토큰 보관)의 흔적 지움
 let S = null, NAMES = null, namesLoading = false, namesFailed = false;
 const detail = {};  // 선수 상세 캐시 : key → {at, data | error}
 const STALE = 40 * 60;  // 30분마다 갱신됨. 이보다 오래되면 늦은 것
@@ -681,13 +682,15 @@ function playerRanges(d) {
 }
 function viewPlayer(spid, grade, ctx) {
   const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null, bonus = owner ? chem(owner.players, grade) : chemSolo(grade), add = bonus;
-  if (!c || c.at !== S.updated) {
-    fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
-      .catch(() => { detail[k] = { at: S.updated, error: true }; render(); });
-    if (!c?.data) return `<div class="head"><button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button><h1>불러오는 중</h1></div><div class="skel"></div><div class="skel"></div>`;
+  if ((!c || c.at !== S.updated) && !c?.busy) {
+    detail[k] = { ...c, busy: true };
+    fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : r.status === 404 ? null : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
+      .catch(() => { detail[k] = { at: S.updated, data: c?.data, error: true }; render(); });
   }
+  if (detail[k].busy && detail[k].data === undefined) return `<div class="head"><button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button><h1>불러오는 중</h1></div><div class="skel"></div><div class="skel"></div>`;
   const d = detail[k].data, mine = who(), saved = watchOf(mine).some(w => key(w) === k);
   const back = `<button class="btn" data-back aria-label="뒤로"><svg class="ico"><use href="#i-back"/></svg></button>`;
+  if (d === undefined) return `<div class="head">${back}<h1>불러오지 못함</h1></div><p class="note">인터넷 연결을 확인한 뒤 다시 열면 됨</p>`;
   if (!d) return `<div class="head">${back}<h1>추적하지 않는 선수</h1></div>
     <p class="note">시세를 받지 않는 선수임. 관심선수로 저장하면 1~2분 뒤부터 보임</p>
     <a class="btn" href="#/watch">관심선수에서 찾아 저장</a>`;
@@ -721,49 +724,30 @@ function watchAll() {  // {구단주명: [선수]}. 방금 저장한 내용은 �
   return Object.fromEntries(S.owners.map(({ nick }) => [nick, (o.lists[nick] || []).map(w => have[key(w)] || { ...w, pos: '', now: null, hist: [], pending: true })]));
 }
 const watchOf = nick => watchAll()[nick] || [];
-async function repoWrite(path, change, message) {
-  const url = `https://api.github.com/repos/${S.repo}/contents/${path}`, headers = { Authorization: 'Bearer ' + LS.get('token', ''), Accept: 'application/vnd.github+json' };
-  const cur = await fetch(url, { headers, cache: 'no-store' });
-  if (cur.status === 401) throw new Error('편집 권한이 만료됨. 비밀번호를 다시 넣어야 함');
-  if (!cur.ok && cur.status !== 404) throw new Error('이 권한으로는 저장소에 접근할 수 없음');
-  const file = cur.ok ? await cur.json() : null;
-  const next = change(file ? JSON.parse(new TextDecoder().decode(unb64(file.content.replace(/\s/g, '')))) : null);  // 한글 구단주명이 들어가므로 UTF-8 로 다룸
-  const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message, content: b64(new TextEncoder().encode(JSON.stringify(next))), ...(file && { sha: file.sha }) }) });
-  if (!put.ok) throw new Error(put.status === 409 ? '다른 변경과 겹침. 다시 눌러 주면 됨' : '저장하지 못함. 잠시 뒤 다시 누르면 됨');
-  return next;
+// 관심선수 저장 : Worker 가 비밀번호를 확인하고(틀린 횟수 제한) watchlist.json 을 커밋함. 브라우저에는 GitHub 토큰이 없음
+async function watchApi(body) {
+  const r = await fetch(SEARCH_API + '/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass: LS.get('pass', ''), ...body }) });
+  const out = await r.json().catch(() => ({}));
+  if (r.status === 401) LS.set('pass', '');
+  if (!r.ok) throw new Error(out.error || '저장하지 못함. 잠시 뒤 다시 누르면 됨');
+  return out;
 }
-async function saveWatch(nick, change, entry) {
-  if (!LS.get('token', '')) { ui.msg = '저장하려면 관심선수 탭 아래 편집 권한에서 비밀번호를 한 번 넣어야 함'; ui.needToken = true; return render(); }
+async function saveWatch(nick, op, entry) {
+  if (!LS.get('pass', '')) { ui.msg = '저장하려면 관심선수 탭 아래 편집 권한에서 비밀번호를 한 번 넣어야 함'; ui.needToken = true; return render(); }
   ui.busy = true; ui.msg = ''; render();
   try {
-    const lists = await repoWrite('watchlist.json', cur => { const all = cur && !Array.isArray(cur) ? cur : {}; return { ...all, [nick]: change(all[nick] || []) }; }, '관심선수 변경');
-    const known = Object.fromEntries([...Object.values(watchAll()).flat(), ...(entry ? [entry] : [])].map(w => [key(w), w]));
+    const { lists } = await watchApi({ nick, op, spid: entry.spid, grade: entry.grade });
+    const known = Object.fromEntries([...Object.values(watchAll()).flat(), entry].map(w => [key(w), w]));
     LS.set('watchOverride', { at: Date.now() / 1000, lists: Object.fromEntries(Object.entries(lists).map(([n, l]) => [n, l.map(w => { const c = known[key(w)] || w;
-      return { spid: w.spid, grade: w.grade, name: c.name || String(w.spid), season: c.season || '', seasonImg: c.seasonImg || '', positions: c.positions || [] }; })])) });
-    ui.msg = entry ? `${nick} 목록에 저장함. 시세는 1~2분 뒤에 표시됨` : `${nick} 목록에서 뺌`;
-  } catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; }
+      return { spid: +w.spid, grade: +w.grade, name: c.name || String(w.spid), season: c.season || '', seasonImg: c.seasonImg || '', positions: c.positions || [] }; })])) });
+    ui.msg = op === 'add' ? `${nick} 목록에 저장함. 시세는 1~2분 뒤에 표시됨` : `${nick} 목록에서 뺌`;
+  } catch (e) { ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; if (!LS.get('pass', '')) ui.needToken = true; }
   ui.busy = false; render();
-}
-const without = k => list => list.filter(w => key(w) !== k);
-const withEntry = e => list => [...without(key(e))(list), { spid: e.spid, grade: e.grade }];
-
-// 편집 권한 : 저장소 주인이 토큰을 비밀번호로 잠가 lock.json 에 올려 두면, 친구들은 비밀번호만으로 토큰을 풀어 씀
-const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a))), unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
-async function passKey(pass, salt) {
-  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-}
-async function lockToken(pass, token) {  // 비밀번호를 새로 정할 때만 씀 (지금은 화면에 없음, 필요하면 직접 실행)
-  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
-  return { salt: b64(salt), iv: b64(iv), data: b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await passKey(pass, salt), new TextEncoder().encode(token))) };
-}
-async function unlockToken(pass, lock) {
-  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(lock.iv) }, await passKey(pass, unb64(lock.salt)), unb64(lock.data)));
 }
 async function unlock(pass) {
   ui.busy = true; render();
-  try { LS.set('token', await unlockToken(pass, await (await fetch('lock.json?t=' + Date.now())).json())); ui.msg = '이 기기에서 저장할 수 있게 됨'; ui.needToken = false; }
-  catch { ui.msg = '비밀번호가 맞지 않음'; ui.needToken = true; }
+  try { LS.set('pass', pass); await watchApi({}); ui.msg = '이 기기에서 저장할 수 있게 됨'; ui.needToken = false; }
+  catch (e) { LS.set('pass', ''); ui.msg = e.message === 'Failed to fetch' ? '인터넷 연결을 확인해야 함' : e.message; ui.needToken = true; }
   ui.busy = false; render();
 }
 
@@ -779,7 +763,7 @@ function search(q) {
   return out.sort((a, b) => b.exact - a.exact || b.spid - a.spid).slice(0, 80);
 }
 function viewWatch() {
-  const nick = who(), list = watchOf(nick), token = LS.get('token', ''), found = search(ui.q), need = ui.q && !NAMES;
+  const nick = who(), list = watchOf(nick), token = LS.get('pass', ''), found = search(ui.q), need = ui.q && !NAMES;
   return `<div class="bar"><h1>관심선수</h1></div>
     <label class="lab first" for="who">누구의 목록</label>
     <select class="field wide" id="who">${S.owners.map(o => `<option value="${esc(o.nick)}" ${o.nick === nick ? 'selected' : ''}>${esc(o.nick)} (${watchOf(o.nick).length}명)</option>`).join('')}</select>
@@ -795,8 +779,7 @@ function viewWatch() {
         <button class="btn" data-add="${i}" ${ui.busy ? 'disabled' : ''}>저장</button></li>`).join('')}</ol>` : ''}
     <details class="perm" ${ui.needToken ? 'open' : ''}><summary>편집 권한<span>${token ? '이 기기는 저장 가능' : '저장하려면 필요함'}</span></summary>
       ${token ? '<p class="note"><button class="btn" data-forget>이 기기의 편집 권한 지우기</button></p>'
-        : S.lock ? `<form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`
-        : '<p class="note">아직 비밀번호가 정해지지 않음</p>'}
+        : `<form class="find" data-unlock><input class="field" id="pass" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="비밀번호"><button class="btn go" ${ui.busy ? 'disabled' : ''}>풀기</button></form>`}
     </details>`;
 }
 // ---------- 따로 받는 파일 (상대전적, 실제 구단 가치) ----------
@@ -981,7 +964,7 @@ function viewOfficial(i, season) {
   const list = seasons.length > 1 || !isCur ? `<section><h2>시즌</h2><div class="gt"><span class="h">시즌</span><span class="h n">경기</span><span class="h n">승률</span>
     ${seasons.map(([k, v]) => `<a href="#/o/${i}/off/${encodeURIComponent(k)}" style="${k === String(s) ? 'color:var(--amber)' : ''}">${esc(mine.labels?.[k] || O.labels?.[k] || k)}${k === O.current ? ' (지금)' : ''}<small class="srec">${String(mine.labels?.[k] || O.labels?.[k]).includes('리그') ? mdate(v.first).split(' ')[0] + ', ' : ''}${v.w}승 ${v.d}무 ${v.l}패, ${esc(v.div)}</small></a>
       <span class="n num">${v.w + v.d + v.l}</span><span class="n num">${pct([v.w, v.d, v.l])}%</span>`).join('')}</div></section>` : '';
-  if (!rows.length) return head + (!isCur && !past ? '<div class="skel"></div>' : `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`) + list;
+  if (!rows.length) return head + (!isCur && !past ? (files[`official_${O.files?.[s]}.json`]?.err ? '<p class="note">이 시즌 기록을 불러오지 못함. 잠시 뒤 다시 열면 됨</p>' : '<div class="skel"></div>') : `<p class="note">아직 받은 공식경기 기록이 없음${O.pending ? '. 기록을 받는 중이라 다음 갱신 때 채워짐' : ''}</p>`) + list;
   const t = sum ? [sum.w, sum.d, sum.l] : tally(rows.map(r => r.r)), gf = rows.reduce((a, r) => a + (r.g || 0), 0), ga = rows.reduce((a, r) => a + (r.og || 0), 0);
   const k = goalKinds(rows.flatMap(r => r.mg)), sc = {};
   rows.forEach(r => r.mg.forEach(g => { const n = g.n || '알 수 없음'; sc[n] = (sc[n] || 0) + 1; }));
@@ -1083,9 +1066,8 @@ function render() {
 function stamp() {
   if (!S) return;
   const min = Math.max(0, Math.round((Date.now() / 1000 - S.updated) / 60)), el = $('#stamp');
-  const asked = ui.pinged && ui.pinged > S.updated && Date.now() / 1000 - ui.pinged < 300;
-  el.textContent = asked ? '갱신 요청함, 1~2분 뒤 반영' : min < 1 ? '방금 갱신' : min < 60 ? `${min}분 전 갱신` : `${Math.floor(min / 60)}시간 전 갱신`;
-  el.classList.toggle('late', !asked && min * 60 > STALE);
+  el.textContent = min < 1 ? '방금 갱신' : min < 60 ? `${min}분 전 갱신` : `${Math.floor(min / 60)}시간 전 갱신`;
+  el.classList.toggle('late', min * 60 > STALE);
   el.title = clock(S.updated) + ' 기준';
 }
 async function load() {
@@ -1095,11 +1077,6 @@ async function load() {
     const fresh = await r.json(), changed = !S || fresh.updated !== S.updated;
     if (S && fresh.v && S.v && fresh.v !== S.v && LS.get('reloaded', '') !== fresh.v) { LS.set('reloaded', fresh.v); return location.reload(); }
     S = fresh;
-    const now = Date.now() / 1000;
-    if (now - S.updated > STALE && LS.get('token', '') && now - LS.get('pinged', 0) > 600) {
-      LS.set('pinged', now);
-      repoWrite('ping.json', () => ({ t: Math.round(now) }), '갱신 요청').then(() => { ui.pinged = now; stamp(); [45, 75, 105, 150].forEach(sec => setTimeout(load, sec * 1000)); }).catch(() => {});
-    }
     if (changed && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)) render(); else stamp();
   } catch {
     if (!S) $('#app').innerHTML = '<div class="bar"><h1>시세를 불러오지 못함</h1></div><p class="note">인터넷 연결을 확인한 뒤 다시 시도하면 됨</p><button class="btn" data-reload>다시 시도</button>';
@@ -1127,10 +1104,10 @@ document.addEventListener('click', e => {
   else if ('more' in d) { ui.more = true; render(); }
   else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
   else if ('reload' in d) load();
-  else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), withEntry({ ...p, grade }), { ...p, grade }); }
-  else if ('forget' in d) { LS.set('token', ''); ui.msg = '이 기기의 편집 권한을 지움'; render(); }
+  else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), 'add', { ...p, grade }); }
+  else if ('forget' in d) { LS.set('pass', ''); ui.msg = '이 기기의 편집 권한을 지움'; render(); }
   else if (d.toggle) { const [spid, grade] = d.toggle.split('_').map(Number), entry = { spid, grade, name: d.name, season: d.season, seasonImg: d.img };
-    const nick = d.who || who(); watchOf(nick).some(w => key(w) === d.toggle) ? saveWatch(nick, without(d.toggle)) : saveWatch(nick, withEntry(entry), entry); }
+    const nick = d.who || who(); saveWatch(nick, watchOf(nick).some(w => key(w) === d.toggle) ? 'del' : 'add', entry); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
