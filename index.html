@@ -269,7 +269,11 @@ details.perm ol li::before { content: counter(s); position: absolute; left: 0; c
 .of .op { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .of time, .mt time { color: var(--muted); font: 600 13px var(--num); white-space: nowrap; }
 .ofform { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; color: var(--muted); font-size: 13px; }
-.ofform > span:not(.form) { white-space: nowrap; }  /* 승무패가 중간에서 끊기지 않게 줄 단위로만 넘김 */
+.ofform > span:not(.form) { white-space: nowrap; }
+.ofform b { color: var(--ink); font-weight: 600; }
+.ofform .over { color: var(--amber); }
+.pay { flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.pay .num { color: var(--ink); font-size: 14px; }  /* 승무패가 중간에서 끊기지 않게 줄 단위로만 넘김 */
 .srec { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 /* 상대전적 */
@@ -553,7 +557,7 @@ function playerRow(p, extra = '', add = chemSolo(p.grade), ctx = '') {
   const cell = (days, cls) => { const then = ago(p, days), [pc, amt] = move(p.now, p.hist.length ? then : 0);
     return `<span class="p-d ${cls}"><span class="lbl">${days}일 전</span><span class="then num">${p.hist.length ? compact(then) : '-'}</span>${pc}${amt}</span>`; };
   return `<li><a class="p" href="#/p/${p.spid}/${p.grade}${ctx}">${face(p)}
-    <span class="p-id">${ident(p)}${rating(p, add)}</span>
+    <span class="p-id">${ident(p)}${rating(p, add)}${p.pay ? `<span class="pay">급여 <span class="num">${p.pay}</span></span>` : ''}</span>
     <span class="p-now num" data-roll="${key(p)}">${compact(p.now)}</span>
     ${p.pending ? '<span class="pending">방금 저장함. 시세는 1~2분 뒤에 표시됨</span>' : cell(1, 'd1') + cell(7, 'd7')}</a>${extra}</li>`.replace('<li>', extra ? '<li class="acts">' : '<li>');
 }
@@ -595,6 +599,13 @@ function viewHome() {
     <a class="q-more" href="#/watch"><span>관심선수</span><span>${w.length ? w.length + '명 보기' : '선수를 찾아 저장'}<svg class="ico"><use href="#i-next"/></svg></span></a>`;
 }
 
+const PAY_CAP = 315;  // 선발 11명 급여 합계 상한 (사용자 기준, 넥슨이 바꾸면 여기만 고침)
+function payLine(players) {
+  const xi = players.filter(p => p.pos && p.pos !== 'SUB');
+  if (!xi.length || xi.some(p => !p.pay)) return '';
+  const sum = xi.reduce((a, p) => a + p.pay, 0), left = PAY_CAP - sum;
+  return `<div class="ofform"><span>선발 ${xi.length}명 급여 <b class="num">${sum}</b> / ${PAY_CAP}</span><span class="${left < 0 ? 'over' : ''}">${left < 0 ? `${-left} 초과` : `${left} 남음`}</span></div>`;
+}
 function viewOwner(i, tab, season) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
@@ -605,7 +616,8 @@ function viewOwner(i, tab, season) {
   const top = `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
     ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
-      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}</div>`
+      ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}
+      ${payLine(o.players)}</div>`
       : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
     <nav class="otabs" aria-label="${esc(o.nick)} 화면 구역">${tabs.map(([k, label, n]) => `<a href="#/o/${i}${k === 'players' ? '' : '/' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}${n !== '' ? `<span class="num">${n}</span>` : ''}</a>`).join('')}</nav>`;
   if (tab === 'off') return top + viewOfficial(i, season);

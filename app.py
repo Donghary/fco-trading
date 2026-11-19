@@ -266,6 +266,7 @@ def card(spid, grade, pos=None, price=None):
         "now": price and price["now"], "hist": price["daily"][-30:] if price else [],
         # 포지션별 오버롤 : 강화 단계와 적응도 5 반영, 팀컬러 제외
         "positions": STATE["info"].get(f"{spid}_{grade}", {}).get("positions", []),
+        "pay": int(STATE["info"].get(f"{spid}_{grade}", {}).get("pay") or 0) or None,  # 급여. 선발 11명 합계 상한 315 (사용자 기준)
     }
 
 
@@ -467,7 +468,13 @@ def build():
             print("데이터센터 조회 실패", k, e, file=sys.stderr)
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
     if keys and not prices:
-        raise RuntimeError("조회할 선수가 있는데 시세를 하나도 받지 못함. 이전 결과를 유지함")
+        # 목요일 패치 점검 등으로 데이터센터가 막힘(403). 점검 중엔 거래도 없으니 배포를 건너뛰고 이전 페이지를 그대로 둠.
+        # 실패로 끝내지 않음 : 점검 내내 실패 메일이 쌓이지 않게 함
+        print("시세를 하나도 받지 못함 (넥슨 점검 추정). 이번 배포는 건너뜀", file=sys.stderr)
+        if os.environ.get("GITHUB_OUTPUT"):
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("skip=true\n")
+        return
 
     try:
         left = value_opponents(prices)
