@@ -26,6 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 SITE = ROOT / "site"
+# 구단주 추가 : 이 목록에 닉네임만 넣으면 됨. 다음 실행에서 그 사람의 30일 치 경기를 받아 옴. 순서를 바꾸지 말고 뒤에 붙일 것(화면 주소 #/o/번호 가 이 순서)
 OWNERS = ["456화이팅", "우끼끼하하", "게임좀그만해라", "이게임초보인데"]
 REPO = os.environ.get("GITHUB_REPOSITORY", "Donghary/fco-trading")  # 관심선수 저장 위치
 REFRESH_MIN = 10  # 미리보기 모드의 갱신 주기(분). 배포 주기는 .github/workflows/update.yml
@@ -124,12 +125,17 @@ def match_rec(d, by_ouid):
 
 
 def refresh_matches():
-    """네 명끼리 붙은 클래식 1on1(40) 과 각자의 공식경기(50) 상세를 받아 쌓음. 넥슨은 최근 약 30일만 주므로 받은 것은 계속 보관"""
+    """구단주끼리 붙은 클래식 1on1(40) 과 각자의 공식경기(50) 상세를 받아 쌓음. 넥슨은 최근 약 30일만 주므로 받은 것은 계속 보관"""
     owners = {n: s["ouid"] for n, s in STATE["squads"].items() if s.get("ouid")}
     if len(owners) < 2:
         return
     by_ouid, cache = {o: n for n, o in owners.items()}, STATE["matches"]
-    first = not STATE["seeded"]  # 처음 한 번은 넥슨이 주는 30일 치를 끝까지 넘겨 받음
+    # 30일 치 전체 받기는 구단주마다 한 번. 예전 상태의 True 는 지금 구단주 전원을 받은 것으로 봄 (구단주를 늘리면 새 사람만 받음)
+    for k in ("seeded", "off_seeded"):
+        if not isinstance(STATE[k], list):
+            STATE[k] = list(owners) if STATE[k] else []
+    # 새 구단주가 있으면 1대1 목록은 전원을 끝까지 넘김 : 새 사람과 기존 사람의 옛 경기도 양쪽 목록에 다 보여야 상대전적으로 잡힘
+    first = bool(set(owners) - set(STATE["seeded"]))
     listing = first or time.time() - STATE["m_at"] >= SQUAD_MIN * 60
     seen = {}
     for n, o in owners.items() if listing else []:
@@ -139,13 +145,14 @@ def refresh_matches():
                 seen.setdefault(m, set()).add(n)
             if len(got) < 100:
                 break
-    h2h = [m for m, who in seen.items() if len(who) >= 2]  # 두 명 이상의 목록에 같이 있으면 네 명끼리 경기
+    h2h = [m for m, who in seen.items() if len(who) >= 2]  # 두 명 이상의 목록에 같이 있으면 구단주끼리 경기
     if listing:
         STATE["m_at"] = time.time()
-    off_first = not STATE["off_seeded"]
-    for n, o in owners.items() if off_first else []:  # 공식경기 목록 : 처음 한 번만 30일 치 전부. 이후는 명단 갱신 때 같이 받음
+    for n, o in owners.items():  # 공식경기 목록 : 구단주마다 처음 한 번만 30일 치 전부. 이후는 명단 갱신 때 같이 받음
+        if n in STATE["off_seeded"]:
+            continue
         got = []
-        for off in range(0, 1000 if off_first else 1, 100):
+        for off in range(0, 1000, 100):
             page = nexon("user/match", ouid=o, matchtype=50, offset=off, limit=100)
             got += page
             if len(page) < 100:
@@ -170,7 +177,10 @@ def refresh_matches():
     keep = set(recent) | {m for ids in STATE["off"].values() for m in ids}
     STATE["matches"] = {m: r for m, r in cache.items() if r.get("type") == 40 or m in keep}
     STATE["off"] = {n: [m for m in ids if m in STATE["matches"] or m in left] for n, ids in STATE["off"].items()}
-    STATE["queue"], STATE["seeded"], STATE["off_seeded"] = [m for m in left if m in h2h or m in STATE["queue"]], True, True
+    STATE["queue"] = [m for m in left if m in h2h or m in STATE["queue"]]
+    if listing:
+        STATE["seeded"] = sorted(set(STATE["seeded"]) | set(owners))
+    STATE["off_seeded"] = sorted(set(STATE["off_seeded"]) | set(owners))
     PENDING[0] = len(left)
     if PENDING[0]:
         print("경기 상세", PENDING[0], "건은 다음 갱신 때 받음")
@@ -595,7 +605,7 @@ def check():
     keep = (ROOT / "watchlist.json").read_text()
     (ROOT / "watchlist.json").write_text(json.dumps({OWNERS[0]: [{"spid": 201200104, "grade": 8}, {"spid": "x", "grade": 8}, {"spid": 201200104, "grade": 99}, 7], "남": [{"spid": 201200104, "grade": 1}], OWNERS[1]: "x"}))
     try:
-        assert read_watch() == {OWNERS[0]: [{"spid": 201200104, "grade": 8}], OWNERS[1]: [], OWNERS[2]: [], OWNERS[3]: []}, read_watch()
+        assert read_watch() == {OWNERS[0]: [{"spid": 201200104, "grade": 8}], **{n: [] for n in OWNERS[1:]}}, read_watch()
     finally:
         (ROOT / "watchlist.json").write_text(keep)
     print("점검 통과. 손흥민(8강) 현재가", p["now"], "/ 특성", i["traits"])

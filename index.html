@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#101112">
 <meta name="color-scheme" content="dark">
 <title>구단 시세판</title>
-<meta name="description" content="FC온라인 네 구단의 구단 가치와 선수 시세를 한 판에서 봄">
+<meta name="description" content="FC온라인 구단주들의 구단 가치와 선수 시세를 한 판에서 봄">
 <meta property="og:title" content="구단 시세판">
-<meta property="og:description" content="FC온라인 네 구단의 구단 가치와 선수 시세">
+<meta property="og:description" content="FC온라인 구단주들의 구단 가치와 선수 시세">
 <link rel="icon" href="favicon.png?v=4" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png?v=4">
 <link rel="manifest" href="manifest.json">
@@ -864,7 +864,7 @@ function viewH2H(a, b) {
   }).sort((x, y) => pct(y.t) - pct(x.t) || y.st.res.length - x.st.res.length);
   const pairs = [];
   order.forEach((x, i) => order.slice(i + 1).forEach(y => pairs.push([x, y])));
-  return `<div class="bar"><h1>네 명 순위 (1대1, ${since}부터)</h1></div>
+  return `<div class="bar"><h1>순위 (1대1, ${since}부터)</h1></div>
     <ol class="rows">${table.map(({ o, st, t }, i) => `<li><a class="lg" href="#/h2h/${o.i}"><span class="rk">${i + 1}</span><b>${esc(o.nick)}</b>
       <small>${st.res.length}경기, 득실 ${st.gf} : ${st.ga}</small><span class="rec num">${wdl(t)}</span><span class="pct num">${pct(t)}<i>%</i></span></a></li>`).join('')}</ol>
     <div class="bar"><h2>상대별 전적</h2></div>
@@ -882,7 +882,7 @@ function viewH2HOwner(H, i) {
   if (!o) return notFound('없는 구단주');
   const ms = H.matches.filter(m => m.p.some(p => p.nick === o.nick)), opp = m => m.p.find(p => p.nick !== o.nick), me = m => m.p.find(p => p.nick === o.nick);
   const head = `<div class="head"><a class="btn" href="#/h2h" aria-label="상대전적으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)} 상대전적</b></h1></div>`;
-  if (!ms.length) return head + '<p class="note">네 명끼리 붙은 기록이 아직 없음</p>';
+  if (!ms.length) return head + '<p class="note">서로 붙은 기록이 아직 없음</p>';
   const others = orderOf().filter(x => x.nick !== o.nick);
   const per = others.map(x => { const pm = ms.filter(m => opp(m).nick === x.nick); return { x, pm, st: duel(pm, o.nick, x.nick), t: record(pm, o.nick, x.nick, baseFor(H, o.nick, x.nick)) }; });
   const t = per.reduce((a, r) => [a[0] + r.t[0], a[1] + r.t[1], a[2] + r.t[2]], [0, 0, 0]);
@@ -1023,7 +1023,7 @@ function viewFind(q) {
     `;
 }
 
-// ---------- 오늘의 등락 : 네 구단 선수 전체에서 1일 등락이 큰 선수 ----------
+// ---------- 오늘의 등락 : 구단 선수 전체에서 1일 등락이 큰 선수 ----------
 function movers() {
   const seen = {};
   orderOf().forEach(o => o.players.forEach(p => { if (p.now >= 1e7 && p.hist.length) (seen[key(p)] ??= { p, who: [] }).who.push(o); }));
