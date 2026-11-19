@@ -100,6 +100,18 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .btn.quiet { border-color: transparent; color: var(--muted); padding: 0 8px; }
 .btn.quiet[aria-pressed=true] { color: var(--amber); }
 
+/* 관심선수 빼기 : 길게 누르기와 확인 창 */
+[data-hold] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+[data-hold].holding > a { background: var(--raise); transition: background .5s; }
+.hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+.sheet-bg { position: fixed; inset: 0; z-index: 8; background: rgba(0, 0, 0, .55); }
+.sheet { position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; max-width: 760px; margin: 0 auto; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--panel); border-top: 1px solid var(--line-strong); border-radius: 12px 12px 0 0; }
+.sheet h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.sheet p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.sheet .field { width: 100%; margin-top: 14px; }
+.sheet-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+
 /* 홈 : 시세판 */
 .board { border-top: 1px solid var(--line-strong); }
 .q { position: relative; border-bottom: 1px solid var(--line); }
@@ -237,7 +249,7 @@ section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-b
 .field:focus { outline: none; border-color: var(--amber); }
 select.field { flex: none; width: 76px; padding: 0 8px; font-family: var(--num); font-weight: 600; font-size: 17px; }
 label.lab { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 22px 0 6px; }
-label.lab.first { margin-top: 0; }
+label.lab.first { margin-top: 16px; }  /* 머리 띠 바로 아래라 띄움 */
 .field.wide { width: 100%; font: 700 16px var(--sans); padding: 0 14px; }
 .rows.listed { margin-top: 14px; }
 .note { color: var(--muted); font-size: 14px; padding: 16px 0; max-width: 62ch; }
@@ -672,7 +684,8 @@ function viewOwner(i, tab, season) {
     <nav class="otabs" aria-label="${esc(o.nick)} 화면 구역">${tabs.map(([k, label, n]) => `<a href="#/o/${i}${k === 'players' ? '' : '/' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}${n !== '' ? `<span class="num">${n}</span>` : ''}</a>`).join('')}</nav>`;
   if (tab === 'off') return top + viewOfficial(i, season);
   if (tab === 'watch') return top + `<div class="bar"><h2>${esc(o.nick)}의 관심선수 ${w.length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
-    ${w.length ? `<ol class="rows">${w.map(p => playerRow(p)).join('')}</ol>` : `<p class="note">아직 관심선수가 없음. 선수 찾아 추가에서 저장</p>`}`;
+    ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
+    ${w.length ? `<ol class="rows">${w.map(p => holdRow(p, o.nick)).join('')}</ol><p class="hint">선수를 길게 누르면 목록에서 뺄 수 있음</p>` : `<p class="note">아직 관심선수가 없음. 선수 찾아 추가에서 저장</p>`}`;
   const pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
   const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) }));
   const since = real.length ? `${clock(real[0].t).split(' ')[0]}부터 기록` : '기록 시작';
@@ -776,6 +789,30 @@ async function unlock(pass) {
   ui.busy = false; render();
 }
 
+// 관심선수 빼기 : 줄을 길게 누르면(마우스는 오른쪽 클릭, 키보드는 Delete) 확인 창. 빼기 버튼은 이름을 가려서 없앰 (사용자 요청)
+const holdRow = (p, nick) => playerRow(p).replace('<li>', `<li data-hold="${key(p)}" data-who="${esc(nick)}" data-name="${esc(p.name)}">`);
+function sheet() {
+  const h = ui.hold; if (!h) return '';
+  const need = !LS.get('pass', '');
+  return `<div class="sheet-bg" data-unhold></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-t">
+    <h2 id="sheet-t">관심선수에서 빼기</h2><p>${esc(h.nick)} 목록의 ${esc(h.name)} ${h.grade}강</p>
+    ${need ? '<input class="field" id="sheet-pass" type="password" inputmode="numeric" placeholder="비밀번호 (이 기기에서 처음 한 번)" autocomplete="current-password" aria-label="비밀번호">' : ''}
+    ${ui.sheetMsg ? `<p class="msg" role="alert">${esc(ui.sheetMsg)}</p>` : ''}
+    <div class="sheet-acts"><button class="btn" data-unhold>취소</button><button class="btn go" data-unwatch ${ui.busy ? 'disabled' : ''}>빼기</button></div></div>`;
+}
+function openHold(li) {
+  const [spid, grade] = li.dataset.hold.split('_').map(Number);
+  ui.hold = { spid, grade, nick: li.dataset.who, name: li.dataset.name }; ui.sheetMsg = '';
+  render(); ($('#sheet-pass') || $('[data-unwatch]'))?.focus();
+}
+async function unwatch() {
+  const h = ui.hold, pass = $('#sheet-pass');
+  if (pass) { if (!pass.value) return pass.focus(); LS.set('pass', pass.value); }
+  await saveWatch(h.nick, 'del', h);
+  if (watchOf(h.nick).some(w => key(w) === key(h))) { ui.sheetMsg = ui.msg; render(); ($('#sheet-pass') || $('[data-unwatch]'))?.focus(); }  // 실패하면 창을 열어 둔 채 이유를 보여 줌
+  else { ui.hold = null; render(); }
+}
+
 function search(q) {
   q = q.replace(/\s/g, '').toLowerCase();
   if (!q || !NAMES) return [];
@@ -792,7 +829,7 @@ function viewWatch() {
   return `<div class="bar"><h1>관심선수</h1></div>
     <label class="lab first" for="who">누구의 목록</label>
     <select class="field wide" id="who">${S.owners.map(o => `<option value="${esc(o.nick)}" ${o.nick === nick ? 'selected' : ''}>${esc(o.nick)} (${watchOf(o.nick).length}명)</option>`).join('')}</select>
-    ${list.length ? `<ol class="rows listed">${list.map(p => playerRow(p, `<button class="btn quiet" data-toggle="${key(p)}" data-who="${esc(nick)}" aria-label="${esc(p.name)} 관심선수에서 빼기" ${ui.busy ? 'disabled' : ''}>빼기</button>`)).join('')}</ol>`
+    ${list.length ? `<ol class="rows listed">${list.map(p => holdRow(p, nick)).join('')}</ol><p class="hint">선수를 길게 누르면 목록에서 뺄 수 있음</p>`
       : `<p class="note">${esc(nick)} 목록이 비어 있음. 아래에서 찾아 저장</p>`}
     <label class="lab" for="q">선수 찾아 ${esc(nick)} 목록에 저장</label>
     <form class="find" data-find><input class="field" id="q" type="search" value="${esc(ui.q)}" placeholder="예 : 손흥민" autocomplete="off" enterkeyhint="search"><button class="btn go">찾기</button></form>
@@ -1077,7 +1114,7 @@ function render() {
   const [, view, a, b, c] = location.hash.split('/');
   after = null;
   if (view === 'watch') { ui.q = a ? decodeURIComponent(a) : ''; if (ui.q) loadNames(); }
-  $('#app').innerHTML = view === 'o' ? viewOwner(+a, b, c) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : view === 'find' ? viewFind(a) : viewHome();
+  $('#app').innerHTML = (view === 'o' ? viewOwner(+a, b, c) : view === 'p' ? viewPlayer(+a, +b, c) : view === 'watch' ? viewWatch() : view === 'h2h' ? viewH2H(a, b) : view === 'find' ? viewFind(a) : viewHome()) + sheet();
   document.querySelectorAll('[data-nav]').forEach(n => n.toggleAttribute('aria-current', n.dataset.nav === (['watch', 'h2h', 'find'].includes(view) ? view : 'home')));
   document.title = view === 'o' && S.owners[+a] ? `${S.owners[+a].nick} : 구단 시세판` : view === 'h2h' ? '상대전적 : 구단 시세판' : '구단 시세판';
   after?.();
@@ -1130,10 +1167,28 @@ document.addEventListener('click', e => {
   else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
   else if ('reload' in d) load();
   else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), 'add', { ...p, grade }); }
+  else if ('unhold' in d) { ui.hold = null; render(); }
+  else if ('unwatch' in d) unwatch();
   else if ('forget' in d) { LS.set('pass', ''); ui.msg = '이 기기의 편집 권한을 지움'; render(); }
   else if (d.toggle) { const [spid, grade] = d.toggle.split('_').map(Number), entry = { spid, grade, name: d.name, season: d.season, seasonImg: d.img };
     const nick = d.who || who(); saveWatch(nick, watchOf(nick).some(w => key(w) === d.toggle) ? 'del' : 'add', entry); }
 });
+{  // 길게 누르기 : 0.55초. 손가락이 10px 넘게 움직이면(스크롤) 취소. 길게 누른 뒤의 클릭은 막음
+  let timer = null, x0 = 0, y0 = 0, held = false;
+  const stop = () => { clearTimeout(timer); timer = null; document.querySelector('.holding')?.classList.remove('holding'); };
+  document.addEventListener('pointerdown', e => { const li = e.target.closest?.('[data-hold]'); if (!li || ui.hold || e.button > 0) return;
+    x0 = e.clientX; y0 = e.clientY; li.classList.add('holding');
+    timer = setTimeout(() => { stop(); held = true; navigator.vibrate?.(12); openHold(li); }, 550); });
+  document.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
+  for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, stop);
+  document.addEventListener('click', e => { if (held) { held = false; e.preventDefault(); e.stopPropagation(); } }, true);
+  document.addEventListener('contextmenu', e => { const li = e.target.closest?.('[data-hold]'); if (!li) return; e.preventDefault(); stop(); if (!ui.hold) openHold(li); });
+  document.addEventListener('keydown', e => {
+    if (ui.hold && e.key === 'Escape') { ui.hold = null; render(); return; }
+    const li = e.target.closest?.('[data-hold]'); if (li && !ui.hold && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); openHold(li); }
+    if (ui.hold && e.key === 'Enter' && e.target.id === 'sheet-pass') { e.preventDefault(); unwatch(); }
+  });
+}
 document.addEventListener('submit', e => {
   e.preventDefault();
   if ('club' in e.target.dataset) { const q = $('#club').value.trim(); $('#club').blur(); if (q) { delete found2[q]; location.hash = '#/find/' + encodeURIComponent(q); } return; }

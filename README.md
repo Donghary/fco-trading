@@ -95,6 +95,7 @@ Data based on NEXON Open API.
 ## 7. 관심선수 저장
 
 - 페이지에서 비밀번호를 한 번 넣으면 그 기기에서 저장 가능
+- 목록에서 빼기 : 선수 줄을 길게 누르면(PC 는 오른쪽 클릭, 키보드는 Delete) 확인 창이 뜸. 비밀번호가 없는 기기는 그 창에서 바로 넣을 수 있음
 - 저장은 Worker 의 `POST /watch` 가 맡음 : 비밀번호 확인(같은 IP 10분에 8번까지 틀릴 수 있음), 구단주와 선수 값 검사 후 `watchlist.json` 을 커밋함
 - 브라우저에는 GitHub 토큰이 없음. 비밀번호는 Worker 비밀값 `WATCH_PASS` 에만 있음
 - 비밀번호 바꾸기 : worker 폴더에서 `npx wrangler@3.99.0 secret put WATCH_PASS`
