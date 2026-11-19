@@ -44,6 +44,16 @@ h1, h2, p, ol, ul, dl, dd { margin: 0; padding: 0; }
 ol, ul { list-style: none; }
 img { display: block; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* 당겨서 새로고침 (홈 화면 앱 전용. 브라우저에는 원래 있음) */
+#ptr { position: fixed; z-index: 6; left: 50%; top: calc(env(safe-area-inset-top) + 8px); width: 38px; height: 38px; margin-left: -19px;
+  display: grid; place-items: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+  transform: translateY(-60px); opacity: 0; pointer-events: none; }
+#ptr.ready { color: var(--amber); }
+#ptr.ready svg { transform: rotate(180deg); }
+#ptr svg { transition: transform .15s; }
+#ptr.spin svg { animation: ptr .8s linear infinite; }
+@keyframes ptr { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #ptr.spin svg { animation: none; } }
 svg.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 /* 숫자 : 좁은 고정폭 숫자, 단위(조 억 만)는 작게 */
@@ -398,6 +408,7 @@ details.mt.off summary .op { overflow: hidden; text-overflow: ellipsis; white-sp
   <symbol id="i-vs" viewBox="0 0 24 24"><path d="M4 6l6 6-6 6M20 6l-6 6 6 6"/></symbol>
   <symbol id="i-tri" viewBox="0 0 10 10"><path d="M5 .8 9.6 9H.4z"/></symbol>
 </svg>
+<div id="ptr" aria-hidden="true"><svg class="ico"><use href="#i-dnw"/></svg></div>
 <header class="top">
   <a class="brand" href="#/"><img src="favicon.png?v=4" alt="" width="26" height="26">구단 시세판</a>
   <nav class="dock" aria-label="주 메뉴">
@@ -1141,6 +1152,27 @@ addEventListener('hashchange', () => {
 });
 addEventListener('resize', () => Object.entries(charts).forEach(([id, r]) => drawChart(id, r)));
 document.addEventListener('visibilitychange', () => document.hidden || load());
+// 당겨서 새로고침 : 홈 화면 앱에는 브라우저의 새로고침이 없어서 직접 만듦. 맨 위에서 70px 넘게 당겼다 놓으면
+// 저장된 페이지를 건너뛰고 새로 받은 뒤 다시 엶 (사용자 요청)
+if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+  const ptr = $('#ptr'), PULL = 70;
+  let y0 = null, d = 0;
+  const show = (y, o) => { ptr.style.transform = `translateY(${y}px)`; ptr.style.opacity = o; };
+  addEventListener('touchstart', e => { y0 = scrollY <= 0 && !e.target.closest('.plot') ? e.touches[0].clientY : null; d = 0; }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (y0 == null) return;
+    d = Math.max(0, (e.touches[0].clientY - y0) * .5);
+    show(Math.min(d, PULL + 20) - 50, Math.min(1, d / PULL));
+    ptr.classList.toggle('ready', d >= PULL);
+  }, { passive: true });
+  addEventListener('touchend', () => {
+    if (y0 == null) return;
+    y0 = null;
+    if (d < PULL) return show(-60, 0);
+    ptr.classList.remove('ready'); ptr.classList.add('spin'); show(PULL - 50, 1);
+    fetch(location.pathname, { cache: 'reload' }).catch(() => {}).finally(() => location.reload());
+  });
+}
 setInterval(load, 60000);
 load();
 </script>
