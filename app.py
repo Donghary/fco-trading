@@ -206,6 +206,21 @@ def parse_price(html):
     }
 
 
+def fetch_price(k):
+    """시세 조회. 거래되는 카드(최근 일별 시세가 있음)인데 현재가가 0 이면 데이터센터 일시 오류로 봄 (2026-11-20 11:05 실제 발생).
+    한 번 더 묻고, 그래도 0 이면 마지막으로 받은 현재가(없으면 어제 값)를 쓰고 stale 로 표시함"""
+    p = parse_price(datacenter("PlayerPriceGraph", *k))
+    if p["now"] or not any(p["daily"][-3:]):
+        return p
+    time.sleep(0.5)
+    p = parse_price(datacenter("PlayerPriceGraph", *k))
+    if not p["now"]:
+        last = (STATE["intra"].get(f"{k[0]}_{k[1]}") or [[0, 0]])[-1][1]
+        p["now"], p["stale"] = last or next(v for v in reversed(p["daily"]) if v), True
+        print("현재가 0 응답, 마지막 값으로 대체", k, file=sys.stderr)
+    return p
+
+
 def parse_info(html):
     def one(pattern):
         m = re.search(pattern, html, re.S)
@@ -437,7 +452,7 @@ def value_opponents(prices):
                 k = (q[0], q[1])
                 if k not in cache:
                     try:
-                        cache[k] = parse_price(datacenter("PlayerPriceGraph", *k))
+                        cache[k] = fetch_price(k)
                     except Exception as e:
                         print("상대 시세 실패", k, e, file=sys.stderr)
                         ok = False
@@ -492,8 +507,8 @@ def build():
     for k in sorted(keys):
         key = f"{k[0]}_{k[1]}"
         try:
-            prices[k] = parse_price(datacenter("PlayerPriceGraph", *k))
-            if prices[k]["now"]:
+            prices[k] = fetch_price(k)
+            if prices[k]["now"] and not prices[k].get("stale"):  # 대체한 값은 시간대별 기록에 넣지 않음
                 add_intra(key, now, prices[k]["now"])
             info = STATE["info"].get(key, {})
             if now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW:
@@ -533,6 +548,10 @@ def build():
             add_point(STATE["value"].setdefault(n, []), now, sum(prices[k]["now"] for k in ks))
     vcut = now - VALUE_DAYS * 86400
     STATE["value"] = {n: [p for p in v if p[0] >= vcut] for n, v in STATE["value"].items() if n in OWNERS}
+    # 한 번만 툭 떨어졌다 돌아온 점은 조회 오류로 보고 지움 (앞뒤 값보다 20% 넘게 낮은 단일 점)
+    # ponytail: 단일 점만 잡음. 여러 번 이어진 오류는 fetch_price 의 대체값이 막음
+    STATE["value"] = {n: [p for i, p in enumerate(v) if not (0 < i < len(v) - 1 and p[1] < .8 * min(v[i - 1][1], v[i + 1][1]))]
+                      for n, v in STATE["value"].items()}
 
     cutoff = now - INTRA_DAYS * 86400
     STATE["intra"] = {k: [p for p in v if p[0] >= cutoff] for k, v in STATE["intra"].items()}
