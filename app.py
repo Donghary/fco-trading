@@ -81,11 +81,17 @@ def nexon(path, **q):
 
 
 def pick_squad(details, owner_ouid):
-    """매치 상세 여러 개 중 가장 최근 경기에서 해당 구단주의 출전 명단을 고름"""
-    latest = max(details, key=lambda d: d["matchDate"])
-    me = next(i for i in latest["matchInfo"] if i["ouid"] == owner_ouid)
-    players = [{"spid": p["spId"], "grade": p["spGrade"], "pos": p["spPosition"]} for p in me["player"]]
-    return players, latest["matchDate"]
+    """매치 상세 여러 개 중 명단이 온전한(11명 이상) 가장 최근 경기에서 해당 구단주의 출전 명단을 고름.
+    몰수, 접속 끊김 경기는 명단이 비어 있음 (실제 3건 확인). 그런 경기만 있으면 None : 이전 명단을 유지함"""
+    full = []
+    for d in details:
+        me = next((i for i in d["matchInfo"] if i["ouid"] == owner_ouid), None)
+        if me and len(me.get("player") or []) >= 11:
+            full.append((d["matchDate"], me))
+    if not full:
+        return None
+    date, me = max(full, key=lambda x: x[0])
+    return [{"spid": p["spId"], "grade": p["spGrade"], "pos": p["spPosition"]} for p in me["player"]], date
 
 
 def refresh_squad(nick, s):
@@ -95,11 +101,13 @@ def refresh_squad(nick, s):
     official = nexon("user/match", ouid=s["ouid"], matchtype=50, offset=0, limit=20)
     s["official"] = official[:10]
     STATE["off"][nick] = list(dict.fromkeys(official + STATE["off"].get(nick, [])))
-    ids = official[:1] + nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)
+    ids = official[:3] + nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)  # 공식 3경기 : 최근 경기 명단이 비었을 때 대비
     if not ids:
         raise RuntimeError("최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음")
     if ids != s.get("ids"):
-        s["players"], s["match"] = pick_squad([nexon("match-detail", matchid=i) for i in ids], s["ouid"])
+        picked = pick_squad([nexon("match-detail", matchid=i) for i in ids], s["ouid"])
+        if picked:
+            s["players"], s["match"] = picked
         s["ids"] = ids
     s["at"] = time.time()
 
@@ -611,10 +619,11 @@ def preview():
 
 
 def check():
-    new = {"matchDate": "2026-11-01T00:00:00", "matchInfo": [
-        {"ouid": "a", "player": [{"spId": 1, "spGrade": 5, "spPosition": 25}]}, {"ouid": "b", "player": []}]}
-    old = {"matchDate": "2026-10-01T00:00:00", "matchInfo": [{"ouid": "a", "player": []}]}
-    assert pick_squad([old, new], "a") == ([{"spid": 1, "grade": 5, "pos": 25}], new["matchDate"])
+    xi = [{"spId": i, "spGrade": 5, "spPosition": 25} for i in range(11)]
+    new = {"matchDate": "2026-11-01T00:00:00", "matchInfo": [{"ouid": "a", "player": []}, {"ouid": "b", "player": xi}]}  # 최근 경기는 몰수(빈 명단)
+    old = {"matchDate": "2026-10-01T00:00:00", "matchInfo": [{"ouid": "a", "player": xi}]}
+    assert pick_squad([old, new], "a")[1] == old["matchDate"]  # 빈 명단 경기는 건너뜀
+    assert pick_squad([new], "a") is None  # 온전한 명단이 없으면 이전 명단 유지
 
     STATE["intra"].clear()
     for t, v in [(1, 10), (2, 10), (3, 10), (4, 20), (5, 20)]:

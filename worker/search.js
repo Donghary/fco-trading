@@ -42,10 +42,13 @@ async function pay(spid) {  // 급여 : 강화와 무관하게 카드마다 고�
 
 async function club(env, nick) {
   const { ouid } = await nexon(env, `id?nickname=${encodeURIComponent(nick)}`, '그 닉네임의 구단을 찾지 못함');
-  const ids = [...await nexon(env, `user/match?ouid=${ouid}&matchtype=50&offset=0&limit=1`), ...await nexon(env, `user/match?ouid=${ouid}&matchtype=52&offset=0&limit=1`)];
+  // 공식 3경기 + 감독모드 1경기 중 명단이 온전한(11명 이상) 가장 최근 경기. 몰수, 접속 끊김 경기는 명단이 비어 있음
+  const ids = [...await nexon(env, `user/match?ouid=${ouid}&matchtype=50&offset=0&limit=3`), ...await nexon(env, `user/match?ouid=${ouid}&matchtype=52&offset=0&limit=1`)];
   if (!ids.length) throw new Miss('최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음');
   const details = await Promise.all(ids.map(id => nexon(env, `match-detail?matchid=${id}`)));
-  const latest = details.sort((a, b) => b.matchDate.localeCompare(a.matchDate))[0];
+  const full = details.filter(d => (d.matchInfo.find(i => i.ouid === ouid)?.player || []).length >= 11);
+  if (!full.length) throw new Miss('최근 경기가 몰수나 접속 끊김이라 명단을 알 수 없음');
+  const latest = full.sort((a, b) => b.matchDate.localeCompare(a.matchDate))[0];
   const me = latest.matchInfo.find(i => i.ouid === ouid), op = latest.matchInfo.find(i => i.ouid !== ouid);
   const players = await Promise.all(me.player.map(async p => ({ spid: p.spId, grade: p.spGrade, pos: POS[p.spPosition] || '', pay: await pay(p.spId), ...await price(p.spId, p.spGrade) })));
   return {
