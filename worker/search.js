@@ -42,8 +42,9 @@ async function pay(spid) {  // 급여 : 강화와 무관하게 카드마다 고�
 
 async function club(env, nick) {
   const { ouid } = await nexon(env, `id?nickname=${encodeURIComponent(nick)}`, '그 닉네임의 구단을 찾지 못함');
-  // 공식 3경기 + 감독모드 1경기 중 명단이 온전한(11명 이상) 가장 최근 경기. 몰수, 접속 끊김 경기는 명단이 비어 있음
-  const ids = [...await nexon(env, `user/match?ouid=${ouid}&matchtype=50&offset=0&limit=3`), ...await nexon(env, `user/match?ouid=${ouid}&matchtype=52&offset=0&limit=1`)];
+  // 공식 최근 3경기 중 명단이 온전한(11명 이상) 가장 최근 경기. 몰수, 접속 끊김 경기는 명단이 비어 있음. 공식경기가 없을 때만 감독모드
+  let ids = await nexon(env, `user/match?ouid=${ouid}&matchtype=50&offset=0&limit=3`);
+  if (!ids.length) ids = await nexon(env, `user/match?ouid=${ouid}&matchtype=52&offset=0&limit=1`);
   if (!ids.length) throw new Miss('최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음');
   const details = await Promise.all(ids.map(id => nexon(env, `match-detail?matchid=${id}`)));
   const full = details.filter(d => (d.matchInfo.find(i => i.ouid === ouid)?.player || []).length >= 11);
