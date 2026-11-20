@@ -48,6 +48,13 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      # GitHub 가 방금 올린 파일을 늦게 인식해 배포가 실패하는 일이 있음 (11.20 05:05 실제 발생). 30초 뒤 한 번 더 시도
       - id: deploy
         if: steps.build.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - if: steps.build.outputs.skip != 'true' && steps.deploy.outcome == 'failure'
+        run: sleep 30
+      - id: deploy2
+        if: steps.build.outputs.skip != 'true' && steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
