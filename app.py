@@ -21,6 +21,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -37,7 +38,11 @@ INFO_DAYS = 7  # 스탯, 특성 재조회 주기(일)
 MATCH_PER_RUN = 600  # 한 번에 받을 경기 상세 수. 한도에 걸리면 그 실행은 멈추고 다음 실행에서 이어 받음
 VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 OPP_PER_RUN = 15  # 한 번에 상대 구단 가치를 매길 공식경기 수 (경기당 데이터센터 시세 조회 최대 18번)
-GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 구단마다 달라 반영하지 않음
+GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 화면의 오버롤 계산에서 더함
+INFO_V = 2  # parse_info 결과 형식. 올리면 저장된 능력치 정보를 다음 실행에서 전부 다시 받음 (2 : 팀컬러 목록 추가)
+TC_PER_RUN = 150  # 팀컬러 효과표를 실행당 몇 개까지 새로 받을지
+TC_DAYS = 30  # 팀컬러 효과 재조회 주기(일)
+ENHANCE_TC = (10004, 10001, 10002, 10003)  # 강화 팀컬러 : 백금빛(11강↑), 금빛(8강↑), 은빛(5강↑), 동빛(3강↑) 물결
 PORT = 8000
 DATACENTER = "https://fconline.nexon.com/datacenter/"
 
@@ -249,7 +254,29 @@ def parse_info(html):
         "nation": one(r'class="etc nation">.*?class="txt">(.*?)</span>'),
         "traits": re.findall(r'class="desc">([^<]+)<', traits.group(1)) if traits else [],
         "summary": stats[:6], "stats": stats[6:],  # 앞 6개 : 스피드, 슛, 패스, 드리블, 수비, 피지컬
+        # 이 카드가 쓸 수 있는 팀컬러 [[번호, 이름]] : 소속(클럽, 국가, 시즌)과 관계(특정 시즌 동료). 0 은 "선택 안 함" 항목
+        # 같은 tdefault 목록 앞쪽에 강화 팀컬러(10001~, "Lv.1 금빛 물결")가 섞여 있어 뺌. 강화는 ENHANCE_TC 로 따로 다룸
+        "tc": [[int(i), clean(n)] for i, n in re.findall(r'class="selector_item tdefault(\d+)"[^>]*>([^<]+)<', html) if i != "0" and not 10000 < int(i) < 10100],
+        "tcr": [[int(i), clean(n)] for i, n in re.findall(r'class="selector_item tspecial(\d+)"[^>]*>([^<]+)<', html) if i != "0"],
     }
+
+
+def parse_tcolor(html):
+    """팀컬러 상세 : 단계마다 [필요 인원, {"all": 전체 능력치, 능력치 이름: 추가}]. 강화 팀컬러는 min(최소 강화)도 담음"""
+    name = re.search(r'<strong>(.*?) : </strong>', html)
+    lv = []
+    for block in re.findall(r'<div class="level lv[a-z]?\d+">(.*?)</ul>', html, re.S):  # 소속 lv1, 강화 lvu1, 황금세대와 듀오 같은 특수 lvs1
+        need = re.search(r'class="num">(\d+)<', block)
+        eff = {("all" if s == "전체 능력치" else s.replace("발리 슛", "발리슛")): int(v)
+               for s, v in re.findall(r'<li>\s*([^<+]+?) \+(\d+)\s*</li>', block)}
+        lv.append([int(need.group(1)) if need else 0, eff])
+    low = re.search(r'(\d+)강 이상의 선수들로', html)
+    return {"name": clean(name.group(1)) if name else "", "lv": lv, **({"min": int(low.group(1))} if low else {})}
+
+
+def tcolor_detail(tid):  # 데이터센터 팀컬러 팝업. 이 두 헤더가 없으면 오류 페이지로 넘어감
+    return parse_tcolor(get(f"{DATACENTER}TeamColorDetail?teamcolorid={tid}",
+                            headers={"X-Requested-With": "XMLHttpRequest", "Referer": DATACENTER + "teamcolor"}).decode(errors="replace"))
 
 
 def datacenter(page, spid, grade, **extra):
@@ -259,7 +286,7 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None, "tcolor": {}}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -443,6 +470,46 @@ def fill_pay(limit=PAY_PER_RUN):
     return max(0, len(todo) - limit)
 
 
+def fill_tcolor(limit=TC_PER_RUN):
+    """팀컬러 효과표 캐시 STATE["tcolor"] = {번호: 상세}. 추적 카드에 나오는 팀컬러와 강화 팀컬러만, 실행당 조금씩"""
+    now = int(time.time())
+    ids = {str(i) for i in ENHANCE_TC} | {str(i) for info in STATE["info"].values() for f in ("tc", "tcr") for i, _ in info.get(f, [])}
+    todo = sorted(i for i in ids if now - STATE["tcolor"].get(i, {}).get("at", 0) >= TC_DAYS * 86400 or not STATE["tcolor"][i].get("lv"))
+    for tid in todo[:limit]:
+        try:
+            t = tcolor_detail(tid)
+        except Exception as e:
+            print("팀컬러 조회 실패", tid, e, file=sys.stderr)
+            break
+        if not t["name"]:  # 오류 페이지로 넘어감 (요청 방식이 바뀐 경우). 비워 두고 다음 실행에서 다시
+            print("팀컬러 상세를 읽지 못함", tid, file=sys.stderr)
+            break
+        STATE["tcolor"][tid] = {**t, "at": now}
+        time.sleep(0.1)
+    return max(0, len(todo) - limit)
+
+
+def tc_level(tid, n):
+    """n명일 때 켜지는 단계 (0 = 안 켜짐)"""
+    return sum(1 for need, _ in STATE["tcolor"].get(str(tid), {}).get("lv", []) if n >= need)
+
+
+def owner_colors(players):
+    """선발 11명으로 켜질 팀컬러 추정 : 소속, 강화, 관계에서 각각 효과가 가장 큰 것 하나 → {"main": [번호, 단계], ...}
+    게임에서 직접 고른 팀컬러와 다를 수 있어 화면에서 바꿀 수 있게 함"""
+    xi = [p for p in players if p["pos"] != "SUB"]
+    infos = [STATE["info"].get(f"{p['spid']}_{p['grade']}", {}) for p in xi]
+    score = lambda tid, lv: sum(v * (34 if k == "all" else 1) for k, v in STATE["tcolor"][str(tid)]["lv"][lv - 1][1].items())
+
+    def best(counts):
+        cand = [(score(t, lv), t, lv) for t, n in counts.items() if (lv := tc_level(t, n))]
+        return [max(cand)[1], max(cand)[2]] if cand else None
+    # 팀컬러별 해당 선수 수. 단일 팀(90000000)은 모든 카드 목록에 있지만 "한 클럽 선수만"이 조건이라 세는 방식으로는 판단 못 해 뺌
+    count = lambda src: Counter(i for info in infos for i in {i for i, _ in info.get(src, [])} if i != 90000000)
+    return {"main": best(count("tc")), "rel": best(count("tcr")),
+            "enh": best({t: sum(p["grade"] >= STATE["tcolor"].get(str(t), {}).get("min", 99) for p in xi) for t in ENHANCE_TC})}
+
+
 def value_opponents(prices):
     """공식경기 상대의 그 경기 명단에 지금 시세를 매겨 저장. 경기마다 한 번만 계산하고 최신 경기부터 조금씩"""
     cache = dict(prices)  # 이번 실행에서 이미 받은 시세는 다시 받지 않음
@@ -519,9 +586,9 @@ def build():
             if prices[k]["now"] and not prices[k].get("stale"):  # 대체한 값은 시간대별 기록에 넣지 않음
                 add_intra(key, now, prices[k]["now"])
             info = STATE["info"].get(key, {})
-            if now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW:
+            if now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW or info.get("v") != INFO_V:
                 page = datacenter("PlayerAbility", *k, n1Grow=GROW)
-                STATE["info"][key] = {**parse_info(page), "at": now, "grow": GROW}
+                STATE["info"][key] = {**parse_info(page), "at": now, "grow": GROW, "v": INFO_V}
         except Exception as e:
             print("데이터센터 조회 실패", k, e, file=sys.stderr)
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
@@ -550,6 +617,13 @@ def build():
     except Exception as e:
         print("급여 채우기 실패", e, file=sys.stderr)
 
+    try:
+        left = fill_tcolor()
+        if left:
+            print("팀컬러 효과", left, "개는 다음 갱신 때 받음")
+    except Exception as e:
+        print("팀컬러 채우기 실패", e, file=sys.stderr)
+
     for n, s in squads.items():  # 실제 구단 가치 : 명단의 모든 선수 시세를 받았을 때만 기록
         ks = [(p["spid"], p["grade"]) for p in s["players"]]
         if ks and all(k in prices for k in ks):
@@ -570,12 +644,16 @@ def build():
     league = season_split()[2]
     write("data.json", {
         "updated": now, "repo": REPO, "v": hashlib.md5((ROOT / "index.html").read_bytes()).hexdigest()[:8],
-        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s, league),
+        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s, league), "tc": owner_colors(s["players"]),
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
         "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
     })
     write("values.json", STATE["value"])
+    # 선수 상세의 오버롤 계산용 : 포지션 가중치와 팀컬러 효과표. 선수 상세를 열 때만 받아감
+    w = json.loads((ROOT / "ovr_weights.json").read_text())
+    write("calc.json", {"w": w["pos"], "sum": w["summary"],
+                        "tc": {i: {k: t[k] for k in ("name", "lv", "min") if k in t} for i, t in STATE["tcolor"].items() if t.get("lv")}})
     write_official()
     own = set(OWNERS)
     named = lambda g: {**g, "n": NAMES.get(g["sp"], ""), "an": NAMES.get(g["a"], "") if g["a"] else ""}
@@ -637,6 +715,15 @@ def check():
     assert [n for n, _ in i["summary"]] == ["스피드", "슛", "패스", "드리블", "수비", "피지컬"], i["summary"]
     assert len(i["stats"]) == 34 and i["stats"][0][0] == "속력" and i["traits"] and i["positions"] and i["pay"], i
     assert POSITIONS[28] == "SUB" and card(201200104, 8)["name"] == "손흥민"
+    # 오버롤 계산 : 로카텔리 26 TOTS 10강. 가중치 합 / 100 의 버림이 데이터센터 CDM 값과 같아야 함
+    loca = parse_info(datacenter("PlayerAbility", 866222077, 10, n1Grow=GROW))
+    w, st = json.loads((ROOT / "ovr_weights.json").read_text()), dict(loca["stats"])
+    assert sum(v * st[n] for n, v in w["pos"]["CDM/RDM/LDM"].items()) // 100 == dict(loca["positions"])["CDM"], loca["positions"]
+    assert all(sum(v * st[n] for n, v in w["summary"][k].items()) // 100 == x for k, x in loca["summary"]), loca["summary"]
+    assert [1021, "유벤투스"] in loca["tc"] and loca["tcr"], loca["tc"]
+    juve, gold = tcolor_detail(1021), tcolor_detail(10001)
+    assert juve["name"] == "유벤투스" and juve["lv"][3] == [11, {"all": 4, "민첩성": 3, "짧은 패스": 3}], juve
+    assert gold["min"] == 8 and gold["lv"] == [[5, {"all": 3}], [8, {"all": 4}]], gold
     keep = (ROOT / "watchlist.json").read_text()
     (ROOT / "watchlist.json").write_text(json.dumps({OWNERS[0]: [{"spid": 201200104, "grade": 8}, {"spid": "x", "grade": 8}, {"spid": 201200104, "grade": 99}, 7], "남": [{"spid": 201200104, "grade": 1}], OWNERS[1]: "x"}))
     try:

@@ -235,6 +235,22 @@ section > h2 { font-size: 13px; font-weight: 600; color: var(--muted); padding-b
 .st .num { font-size: 18px; color: var(--flat); }
 .s130 { --bar: var(--s130); } .s140 { --bar: var(--s140); } .s150 { --bar: var(--s150); } .s160 { --bar: var(--s160); }
 .st[class*=" s1"] .num { color: var(--bar); font-weight: 700; }
+button.st { width: 100%; border: 0; border-radius: 0; text-align: left; cursor: pointer; }
+button.st:disabled { cursor: default; }
+.st .wt { font: 600 11px var(--num); color: var(--faint); margin-left: 5px; }  /* 능력치 구간 색(.num)에 안 걸리게 num 클래스를 쓰지 않음 */
+.st .tr { font-style: normal; font-size: 12px; font-weight: 700; color: var(--amber); margin-left: 3px; }
+.st.trained span { color: var(--ink); }
+/* 오버롤 계산 */
+.calc-out { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 14px 0 2px; }
+.calc-out .big { font-size: 40px; line-height: 1; font-weight: 700; color: var(--ink); }
+.calc-pos { color: var(--muted); font-size: 15px; font-weight: 600; }
+.calc-sub { color: var(--muted); font-size: 13px; }
+.calc-sub .num { color: var(--ink); font-size: 15px; margin-left: 4px; }
+.calc-in { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 12px; }
+.calc-in label { display: grid; gap: 4px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.calc-in .span2 { grid-column: 1 / -1; }
+.calc-in select.field { width: 100%; min-height: 44px; padding: 0 10px; font: 600 15px var(--sans); color: var(--ink); }
+.calc-note { color: var(--muted); font-size: 13px; margin-top: 10px; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 .facts div { display: flex; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .facts dt { color: var(--muted); font-size: 13px; }
@@ -523,7 +539,73 @@ function chem(players, grade) {
 }
 const chemSolo = grade => grade >= 11 ? 9 : grade >= 8 ? 8 : 0;
 const tier = v => v >= 160 ? 's160' : v >= 150 ? 's150' : v >= 140 ? 's140' : v >= 130 ? 's130' : '';
-const chemLabel = c => c ? `적응도 5 + 풀케미 +${c}` : '적응도 5';
+
+// ---------- 오버롤 계산 (선수 상세) ----------
+// 표시 오버롤 = floor(Σ 능력치 × 포지션 가중치 / 100). 가중치는 인벤 집중훈련 계산기 표(ovr_weights.json, 넥슨 값 5,040개와 일치 확인)
+// 능력치 = 데이터센터 값(적응도 5) + (적응도 − 5) + 고른 팀컬러 효과(전체 + 능력치별) + 집중훈련(능력치당 +1, +2)
+let CALC = null, calcLoading = false;
+const calcSel = {};  // 카드별로 고른 값. 새로 고치기 전까지 유지
+const POS_LIST = ['ST', 'CF', 'LW', 'RW', 'LM', 'RM', 'CAM', 'CM', 'CDM', 'LWB', 'RWB', 'LB', 'RB', 'CB', 'SW', 'GK'];
+const ENHANCE = [10004, 10001, 10002, 10003];  // 백금빛, 금빛, 은빛, 동빛 물결
+function loadCalc() {
+  if (CALC || calcLoading) return;
+  calcLoading = true;
+  fetch('calc.json?t=' + S.updated).then(r => r.ok ? r.json() : Promise.reject()).then(j => { CALC = j; }, () => { CALC = { failed: true }; })
+    .finally(() => { calcLoading = false; render(); });
+}
+const posGroup = p => Object.keys(CALC.w).find(g => g.split('/').includes(p));
+const tcEff = pick => pick && CALC.tc[pick[0]]?.lv[pick[1] - 1]?.[1];  // [번호, 단계] → 효과
+function calcState(k, d, f, team) {
+  if (!f.stats?.length) return null;
+  loadCalc();
+  if (!CALC || CALC.failed) return null;
+  if (!calcSel[k]) {  // 기본값 : 그 구단 선발로 켜지는 팀컬러 중 이 카드에 해당하는 것
+    const t = team?.tc || {}, has = (list, p) => p && list?.some(([id]) => id === p[0]), line = team?.players.find(p => key(p) === k)?.pos;
+    calcSel[k] = { pos: line && line !== 'SUB' ? line : f.positions?.[0]?.[0] || 'ST', grow: 5, tr: {},
+                   tc: has(f.tc, t.main) ? t.main : null, rel: has(f.tcr, t.rel) ? t.rel : null,
+                   enh: t.enh && d.grade >= (CALC.tc[t.enh[0]]?.min ?? 99) ? t.enh : null };
+  }
+  const sel = calcSel[k], effs = [sel.tc, sel.enh, sel.rel].map(tcEff).filter(Boolean);
+  const plus = n => sel.grow - 5 + effs.reduce((a, e) => a + (e.all || 0) + (e[n] || 0), 0);
+  const vals = Object.fromEntries(f.stats.map(([n, v]) => [n, v + plus(n) + (sel.tr[n] || 0)]));
+  const dot = w => Object.entries(w).reduce((a, [s, x]) => a + x * (vals[s] ?? 0), 0);  // 100배 값
+  return { sel, vals, effs, slots: d.grade >= 11 ? 6 : 5, used: Object.values(sel.tr).filter(Boolean).length,
+           pts: p => { const g = posGroup(p); return g ? dot(CALC.w[g]) : null; },
+           sum: ([n, v]) => CALC.sum[n] ? Math.floor(dot(CALC.sum[n]) / 100) : v + plus('') };  // 골키퍼 요약처럼 공식이 없으면 전체 보너스만
+}
+function calcHTML(cx, d, f, team) {
+  const { sel, effs, used, slots } = cx, p = cx.pts(sel.pos) ?? 0;
+  const opt = (v, label, on) => `<option value="${v}" ${on ? 'selected' : ''}>${esc(label)}</option>`;
+  const tcOpts = (list, cur) => opt('', '없음', !cur) + list.flatMap(([id, name]) => (CALC.tc[id]?.lv || []).map(([need], i) =>
+    opt(`${id}:${i + 1}`, `${name} ${i + 1}단계 (${need}명)`, cur?.[0] === id && cur?.[1] === i + 1))).join('');
+  const enh = ENHANCE.filter(id => d.grade >= (CALC.tc[id]?.min ?? 99)).map(id => [id, CALC.tc[id].name]);
+  const total = {};
+  effs.forEach(e => Object.entries(e).forEach(([n, v]) => { total[n] = (total[n] || 0) + v; }));
+  const eff = [total.all ? `전체 +${total.all}` : '', ...Object.entries(total).filter(([n]) => n !== 'all').map(([n, v]) => `${n} +${v}`)].filter(Boolean).join(', ');
+  return `<section class="calc"><h2>오버롤 계산</h2>
+    <div class="calc-out"><span class="calc-pos">${esc(sel.pos)}</span><b class="big num">${Math.floor(p / 100)}</b>
+      <span class="calc-sub">계산값<b class="num">${(p / 100).toFixed(2)}</b></span>
+      <span class="calc-sub">다음까지<b class="num">${((100 - p % 100) / 100).toFixed(2)}</b></span>
+      <span class="calc-sub">집중훈련<b class="num">${used}/${slots}</b></span></div>
+    <div class="calc-in">
+      <label>포지션<select class="field" data-calc="pos">${[...new Set([sel.pos, ...(f.positions || []).map(x => x[0]), ...POS_LIST])].map(x => opt(x, x, x === sel.pos)).join('')}</select></label>
+      <label>적응도<select class="field" data-calc="grow">${[5, 4, 3, 2, 1].map(g => opt(g, g + '단계', g === sel.grow)).join('')}</select></label>
+      <label>소속 팀컬러<select class="field" data-calc="tc">${tcOpts(f.tc || [], sel.tc)}</select></label>
+      <label>강화 팀컬러<select class="field" data-calc="enh">${tcOpts(enh, sel.enh)}</select></label>
+      <label class="span2">관계 팀컬러<select class="field" data-calc="rel">${tcOpts(f.tcr || [], sel.rel)}</select></label>
+    </div>
+    <p class="calc-note">${eff ? `팀컬러 효과 : ${eff}` : '팀컬러 없음'}${team ? `. 처음 값은 ${esc(team.nick)} 선발로 켜지는 팀컬러` : ''}</p>
+    <p class="calc-note">세부 능력치를 누르면 집중훈련 +1, +2, 해제 순서로 바뀜. 작은 숫자는 ${esc(sel.pos)} 가중치</p>
+    ${ui.calcMsg ? `<p class="msg" role="alert">${esc(ui.calcMsg)}</p>` : ''}
+  </section>`;
+}
+function calcKey() { const [, , a, b] = location.hash.split('/'); return `${a}_${b}`; }
+function train(n) {  // 집중훈련 : 0 → +1 → +2 → 해제. 1~10강은 5개, 11강 이상은 6개 능력치까지
+  const k = calcKey(), sel = calcSel[k]; if (!sel) return;
+  const cur = sel.tr[n] || 0, slots = +k.split('_')[1] >= 11 ? 6 : 5;
+  if (!cur && Object.values(sel.tr).filter(Boolean).length >= slots) { ui.calcMsg = `집중훈련은 능력치 ${slots}개까지`; return render(); }
+  sel.tr[n] = (cur + 1) % 3; ui.calcMsg = ''; render();
+}
 
 // ---------- 구단 합계 ----------
 function team(players) {
@@ -719,7 +801,8 @@ function playerRanges(d) {
   ];
 }
 function viewPlayer(spid, grade, ctx) {
-  const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null, bonus = owner ? chem(owner.players, grade) : chemSolo(grade), add = bonus;
+  const k = `${spid}_${grade}`, c = detail[k], owner = ctx ? S.owners[+ctx.slice(1)] : null;
+  const team = owner || S.owners.find(o => o.nick === who());  // 팀컬러 기본값을 정할 구단 : 들어온 구단, 아니면 관심선수 탭에서 고른 구단주
   if ((!c || c.at !== S.updated) && !c?.busy) {
     detail[k] = { ...c, busy: true };
     fetch(`p/${k}.json?t=${S.updated}`).then(r => r.ok ? r.json() : r.status === 404 ? null : Promise.reject()).then(data => { detail[k] = { at: S.updated, data }; render(); })
@@ -732,20 +815,27 @@ function viewPlayer(spid, grade, ctx) {
   if (!d) return `<div class="head">${back}<h1>추적하지 않는 선수</h1></div>
     <p class="note">시세를 받지 않는 선수임. 관심선수로 저장하면 1~2분 뒤부터 보임</p>
     <a class="btn" href="#/watch">관심선수에서 찾아 저장</a>`;
-  const ranges = playerRanges(d), f = d.info || {};
+  const ranges = playerRanges(d), f = d.info || {}, cx = calcState(k, d, f, team), g = cx && posGroup(cx.sel.pos);
   after = () => drawChart('player', ranges);
-  const st = ([n, v0]) => { const v = v0 + add; return `<div class="st ${tier(v)}" style="--w:${Math.min(100, v / 1.5).toFixed(0)}%"><span>${esc(n)}</span><b class="num">${v}</b></div>`; };
+  const bar = v => `style="--w:${Math.min(100, v / 1.5).toFixed(0)}%"`;
+  const sumRow = ([n, v0]) => { const v = cx ? cx.sum([n, v0]) : v0; return `<div class="st ${tier(v)}" ${bar(v)}><span>${esc(n)}</span><b class="num">${v}</b></div>`; };
+  const statRow = ([n, v0]) => {  // 누르면 집중훈련. 작은 숫자 : 고른 포지션의 가중치
+    const v = cx ? cx.vals[n] : v0, t = cx?.sel.tr[n] || 0, w = g ? CALC.w[g][n] : 0;
+    return `<button type="button" class="st ${tier(v)}${t ? ' trained' : ''}" ${bar(v)} data-tr="${esc(n)}" ${cx ? '' : 'disabled'} aria-pressed="${!!t}">
+      <span>${esc(n)}${w ? `<i class="wt">${w}</i>` : ''}</span><b class="num">${v}${t ? `<em class="tr">+${t}</em>` : ''}</b></button>`;
+  };
   const facts = [['급여', f.pay], ['키', f.height], ['몸무게', f.weight], ['체형', f.body], ['주발', f.foot], ['개인기', f.skill ? f.skill + '성' : ''],
                  ['명성', f.fame], ['국적', f.nation], ['소속', f.team], ['생년월일', f.birth]].filter(x => x[1]);
   return `<div class="head">${back}<h1>${ident(d)}</h1></div>
     <div class="who quote"><div>${bigPrice(d.now)}
-      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${v + add}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
+      ${f.positions?.length ? `<div class="ovr">${f.positions.map(([p, v]) => `<span>${esc(p)}<span class="num">${cx?.pts(p) != null ? Math.floor(cx.pts(p) / 100) : v}</span></span>`).join('')}<span>${esc(d.season)}</span></div>` : `<div class="ovr"><span>${esc(d.season)}</span></div>`}</div>
       ${face(d).replace('width="48" height="48" loading="lazy"', 'width="96" height="96"')}</div>
     ${d.hist.length ? agoBlock(d.now, ago(d, 1), ago(d, 7)) : ''}
     ${f.traits?.length ? `<ul class="traits"><li>특성</li>${f.traits.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
     ${chartHTML('player', ranges)}
-    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, ${owner ? esc(owner.nick) + ' 구단 ' : ''}${chemLabel(bonus)} 기준)</h2><div class="sum">${f.summary.map(st).join('')}</div></section>
-      <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(st).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
+    ${cx ? calcHTML(cx, d, f, team) : ''}
+    ${f.stats?.length ? `<section><h2>능력치 (${d.grade}강, ${cx ? '위 오버롤 계산 기준' : '적응도 5, 팀컬러 없음'})</h2><div class="sum">${f.summary.map(sumRow).join('')}</div></section>
+      <section><h2>세부 능력치</h2><div class="stats">${f.stats.map(statRow).join('')}</div></section>` : '<p class="note">능력치 정보를 아직 받아오지 못함</p>'}
     ${facts.length ? `<section><h2>선수 정보</h2><dl class="facts">${facts.map(([a, b]) => `<div><dt>${a}</dt><dd>${esc(b)}</dd></div>`).join('')}</dl></section>` : ''}
     <button class="btn watchbtn" data-toggle="${k}" data-name="${esc(d.name)}" data-season="${esc(d.season)}" data-img="${esc(d.seasonImg)}" ${ui.busy ? 'disabled' : ''}>${saved ? `${esc(mine)} 관심선수에서 빼기` : `${esc(mine)} 관심선수로 저장`}</button>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}`;
@@ -1152,7 +1242,11 @@ async function loadNames() {
 }
 
 // ---------- 동작 ----------
-document.addEventListener('change', e => { if (e.target.id === 'who') { LS.set('who', e.target.value); ui.msg = ''; render(); } });
+document.addEventListener('change', e => {
+  if (e.target.id === 'who') { LS.set('who', e.target.value); ui.msg = ''; render(); }
+  const c = e.target.dataset?.calc, sel = c && calcSel[calcKey()];  // 오버롤 계산의 선택 : 포지션, 적응도, 팀컬러("번호:단계")
+  if (sel) { const v = e.target.value; sel[c] = c === 'pos' ? v : c === 'grow' ? +v : v ? v.split(':').map(Number) : null; ui.calcMsg = ''; render(); }
+});
 document.addEventListener('click', e => {
   const link = e.target.closest('[data-setwho]'); if (link) LS.set('who', link.dataset.setwho);
   const b = e.target.closest('button, [role=tab]'); if (!b) return;
@@ -1166,6 +1260,7 @@ document.addEventListener('click', e => {
   else if ('more' in d) { ui.more = true; render(); }
   else if ('back' in d) { history.length > 1 ? history.back() : location.hash = '#/'; }
   else if ('reload' in d) load();
+  else if (d.tr) train(d.tr);
   else if (d.add) { const p = search(ui.q)[d.add], grade = +$('#g' + d.add).value; saveWatch(who(), 'add', { ...p, grade }); }
   else if ('unhold' in d) { ui.hold = null; render(); }
   else if ('unwatch' in d) unwatch();
