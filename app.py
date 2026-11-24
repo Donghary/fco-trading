@@ -102,13 +102,16 @@ def pick_squad(details, owner_ouid):
 def refresh_squad(nick, s):
     """s 를 최신 명단으로 고침. ouid 와 최근 경기 번호를 기억해 넥슨 API 호출을 줄임"""
     s["ouid"] = s.get("ouid") or nexon("id", nickname=nick)["ouid"]
-    # 명단은 공식경기 기준 (감독모드 실험 명단으로 구단 가치가 출렁이지 않게, 2026-11-20 사용자 선택). 공식경기가 전혀 없을 때만 감독모드
+    # 명단은 공식경기와 1대1(클래식) 중 가장 최근 경기 기준 (2026-11-24 사용자 선택 : 1대1 도 포함).
+    # 감독모드는 실험 명단이 많아 구단 가치가 출렁이므로 뺌(2026-11-20). 둘 다 없을 때만 감독모드
     official = nexon("user/match", ouid=s["ouid"], matchtype=50, offset=0, limit=20)
     s["official"] = official[:10]
     STATE["off"][nick] = list(dict.fromkeys(official + STATE["off"].get(nick, [])))
-    ids = official[:3] or nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)  # 공식 3경기 : 최근 경기 명단이 비었을 때 대비
+    duel = nexon("user/match", ouid=s["ouid"], matchtype=40, offset=0, limit=3)
+    # 각 3경기 : 최근 경기 명단이 비었을 때(몰수, 접속 끊김) 대비. pick_squad 가 그중 가장 최근 온전한 명단을 고름
+    ids = official[:3] + duel or nexon("user/match", ouid=s["ouid"], matchtype=52, offset=0, limit=1)
     if not ids:
-        raise RuntimeError("최근 공식경기, 감독모드 기록이 없어 명단을 알 수 없음")
+        raise RuntimeError("최근 공식경기, 1대1, 감독모드 기록이 없어 명단을 알 수 없음")
     if ids != s.get("ids"):
         picked = pick_squad([nexon("match-detail", matchid=i) for i in ids], s["ouid"])
         if picked:
