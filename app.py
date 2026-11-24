@@ -22,6 +22,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
+from datetime import date, datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -289,7 +290,8 @@ def datacenter(page, spid, grade, **extra):
 
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
-STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None, "tcolor": {}}
+STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None, "tcolor": {},
+         "vday": {}}  # vday : 실제 기록 시작 전 구단 가치를 경기 명단과 일별 시세로 채운 값 {구단주: {"YYYY-MM-DD": 합계}}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -513,6 +515,66 @@ def owner_colors(players):
             "enh": best({t: sum(p["grade"] >= STATE["tcolor"].get(str(t), {}).get("min", 99) for p in xi) for t in ENHANCE_TC})}
 
 
+KST = timezone(timedelta(hours=9))
+kst_day = lambda t: datetime.fromtimestamp(t, KST).date()  # 유닉스 시각 → 한국 날짜
+
+
+def squads_of(nick):
+    """그 구단주 쪽 명단(11명 이상)이 남은 공경, 1대1 기록 [(한국 날짜, lu)] 시각 순. 명단 규칙은 refresh_squad 와 같음(감독모드 제외)"""
+    out = []
+    for r in STATE["matches"].values():
+        me = next((p for p in r["p"] if p["nick"] == nick), None) if r.get("type") in (40, 50) else None
+        if me and len(me.get("lu") or []) >= 11:
+            utc = datetime.fromisoformat(r["date"]).replace(tzinfo=timezone.utc)  # 넥슨 경기 시각은 UTC
+            out.append((utc.timestamp(), utc.astimezone(KST).date(), me["lu"]))
+    return [(d, lu) for _, d, lu in sorted(out, key=lambda x: x[0])]
+
+
+def daily_values(squads, price_of, first, last):
+    """first~last 날마다 그날 끝까지의 가장 최근 명단을 그날 일별 시세로 더함. price_of(spid, grade, 날짜) → 시세"""
+    out, d = {}, first
+    while d <= last:
+        lu = [x for day, x in squads if day <= d][-1:]
+        if lu:
+            out[d.isoformat()] = sum(price_of(q[0], q[1], d) for q in lu[0])
+        d += timedelta(days=1)
+    return out
+
+
+def backfill_values(prices):
+    """실제 기록(STATE["value"]) 이 시작되기 전 구단 가치를 채움. 구단주마다 한 번만 (새 구단주는 추가된 다음 실행에서)"""
+    cache = dict(prices)
+    for nick in OWNERS:
+        real = STATE["value"].get(nick)
+        if nick in STATE["vday"] or not real:
+            continue
+        sq = squads_of(nick)
+        if not sq:
+            continue
+        def price_of(spid, grade, d):
+            if (spid, grade) not in cache:
+                cache[(spid, grade)] = fetch_price((spid, grade))
+                time.sleep(0.1)
+            p = cache[(spid, grade)]
+            return dict(zip(p["days"], p["daily"])).get(f"{d.month}.{d.day:02d}", 0)  # 데이터센터 날짜 표기 "11.05"
+        STATE["vday"][nick] = daily_values(sq, price_of, sq[0][0], kst_day(real[0][0]) - timedelta(days=1))
+        print("구단 가치 과거 채움", nick, len(STATE["vday"][nick]), "일")
+
+
+def value_series(nick):
+    """그때 그 명단 기준 구단 가치 [(시각, 값)] : 채운 일별 값(그날 23:59) + 실제 기록"""
+    days = [(datetime.combine(date.fromisoformat(k), datetime.max.time(), KST).timestamp(), v) for k, v in sorted(STATE["vday"].get(nick, {}).items())]
+    return [[int(t), v] for t, v in days] + STATE["value"].get(nick, [])
+
+
+def value_summary(nick, now):
+    """홈과 구단 머리글용 : 24시간 전, 7일 전 값과 최근 30일 일별 값 (그 시각 직전의 기록)"""
+    s = value_series(nick)
+    at = lambda t: next((v for tt, v in reversed(s) if tt <= t), None)
+    spark = [v for v in (at(now - i * 86400) for i in range(29, 0, -1)) if v is not None]
+    return {"d1": at(now - 86400), "d7": at(now - 7 * 86400), "spark": spark} if s else None
+
+
 def value_opponents(prices):
     """공식경기 상대의 그 경기 명단에 지금 시세를 매겨 저장. 경기마다 한 번만 계산하고 최신 경기부터 조금씩"""
     cache = dict(prices)  # 이번 실행에서 이미 받은 시세는 다시 받지 않음
@@ -627,6 +689,11 @@ def build():
     except Exception as e:
         print("팀컬러 채우기 실패", e, file=sys.stderr)
 
+    try:
+        backfill_values(prices)
+    except Exception as e:  # 시세 조회가 막히면 그 구단주는 다음 실행에서 다시
+        print("구단 가치 과거 채우기 실패", e, file=sys.stderr)
+
     for n, s in squads.items():  # 실제 구단 가치 : 명단의 모든 선수 시세를 받았을 때만 기록
         ks = [(p["spid"], p["grade"]) for p in s["players"]]
         if ks and all(k in prices for k in ks):
@@ -647,12 +714,12 @@ def build():
     league = season_split()[2]
     write("data.json", {
         "updated": now, "repo": REPO, "v": hashlib.md5((ROOT / "index.html").read_bytes()).hexdigest()[:8],
-        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s, league), "tc": owner_colors(s["players"]),
+        "owners": [{"nick": n, "error": s.get("error"), "match": s["match"], **official_of(n, s, league), "tc": owner_colors(s["players"]), "val": value_summary(n, now),
                     "players": [card(**p, price=prices.get((p["spid"], p["grade"]))) for p in s["players"]]}
                    for n, s in squads.items()],
         "watch": {n: [card(**w, price=prices.get((w["spid"], w["grade"]))) for w in ws] for n, ws in watch.items()},
     })
-    write("values.json", STATE["value"])
+    write("values.json", {n: value_series(n) for n in OWNERS})  # 그때 그 명단 기준 (채운 일별 값 + 실제 기록)
     # 선수 상세의 오버롤 계산용 : 포지션 가중치와 팀컬러 효과표. 선수 상세를 열 때만 받아감
     w = json.loads((ROOT / "ovr_weights.json").read_text())
     write("calc.json", {"w": w["pos"], "sum": w["summary"],
@@ -705,6 +772,12 @@ def check():
     old = {"matchDate": "2026-10-01T00:00:00", "matchInfo": [{"ouid": "a", "player": xi}]}
     assert pick_squad([old, new], "a")[1] == old["matchDate"]  # 빈 명단 경기는 건너뜀
     assert pick_squad([new], "a") is None  # 온전한 명단이 없으면 이전 명단 유지
+
+    # 구단 가치 과거 채우기 : 11.02 명단 A(1, 2번 카드), 11.04 명단 B(3번). 그날 끝까지의 마지막 명단 × 그날 시세
+    d = date(2026, 11, 1)
+    sq = [(d + timedelta(days=1), [[1, 8, 25], [2, 8, 3]]), (d + timedelta(days=3), [[3, 8, 25]])]
+    got = daily_values(sq, lambda spid, g, day: spid * 100 + day.day, d, d + timedelta(days=4))
+    assert got == {"2026-11-02": 102 + 202, "2026-11-03": 103 + 203, "2026-11-04": 304, "2026-11-05": 305}, got
 
     STATE["intra"].clear()
     for t, v in [(1, 10), (2, 10), (3, 10), (4, 20), (5, 20)]:

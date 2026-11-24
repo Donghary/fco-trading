@@ -153,6 +153,8 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--dock) + env(
 .ago { display: grid; grid-template-columns: auto auto auto 1fr; gap: 2px 12px; margin-top: 10px; font-size: 16px; align-items: baseline; }
 .ago .lbl { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .ago .then { color: var(--muted); }
+.split { margin-top: 8px; color: var(--muted); font-size: 13px; }  /* 7일 변화 = 시세 + 선수 교체 */
+.split .num { font-size: 14px; font-weight: 600; }
 
 /* 차트 */
 .chart { margin-top: 18px; }
@@ -615,6 +617,17 @@ function team(players) {
   return { n: ps.length, now: sum(p => p.now), d1: sum(p => ago(p, 1)), d7: sum(p => ago(p, 7)),
            hist: [...Array(days).keys()].map(i => sum(p => ago(p, days - i))) };
 }
+// 구단 가치 등락은 "그때 그 명단" 기준 (게임 첫 화면 구단 가치와 같은 개념, 2026-11-24 사용자 요청). app.py 의 value_summary 가 만든 o.val 사용
+// cur : 지금 명단 기준 값. 변화량을 시세 변화와 선수 교체로 나눌 때 씀. 기록이 없는 새 구단주는 지금 명단 기준으로만 보임
+function club(o) {
+  const t = team(o.players), v = o.val;
+  return v?.spark?.length ? { ...t, d1: v.d1 ?? t.d1, d7: v.d7 ?? t.d7, hist: v.spark, cur: t } : { ...t, cur: null };
+}
+function splitLine(t) {  // 7일 변화 = 시세 변화 + 선수 교체
+  if (!t.cur || !t.d7 || !t.cur.d7) return '';
+  const all = t.now - t.d7, price = t.now - t.cur.d7, sg = v => `<span class="num ${v > 0 ? 'up' : v < 0 ? 'down' : ''}">${v > 0 ? '+' : v < 0 ? '−' : ''}${v ? compact(v) : '0'}</span>`;
+  return `<div class="split">7일 변화 ${sg(all)} = 시세 ${sg(price)}, 선수 교체 ${sg(all - price)}</div>`;
+}
 const day0 = () => { const d = new Date(S.updated * 1000); d.setHours(0, 0, 0, 0); return d / 1000; };
 function dailyPts(values, labels) {  // 일별 값에 시각을 붙이고 현재가를 끝에 더함
   const n = values.length, base = day0();
@@ -715,7 +728,7 @@ function playerList(players, team, ctx, title) {
 }
 
 function viewHome() {
-  const teams = S.owners.map(o => team(o.players)), rel = t => [...t.hist, t.now].map((v, _, h) => v / h[0]);
+  const teams = S.owners.map(club), rel = t => [...t.hist, t.now].map((v, _, h) => v / h[0]);
   const span = Math.max(.01, ...teams.filter(t => t.n).map(t => Math.max(...rel(t)) - Math.min(...rel(t))));  // 가장 크게 움직인 구단의 폭을 공통 눈금으로
   // 순위 : 지금 가치 순, 어제 순위와 비교해 변동 표시. 보이는 순서는 사용자가 정한 순서 그대로
   const rank = val => Object.fromEntries(S.owners.map((o, i) => i).filter(i => teams[i].n).sort((a, b) => val(teams[b]) - val(teams[a])).map((i, r) => [i, r + 1]));
@@ -753,13 +766,13 @@ function payLine(players) {
 function viewOwner(i, tab, season) {
   const o = S.owners[i];
   if (!o) return notFound('없는 구단주');
-  const t = team(o.players), off = o.official || [], rec = tally(off.map(m => m.r)), w = watchOf(o.nick);
+  const t = club(o), off = o.official || [], rec = tally(off.map(m => m.r)), w = watchOf(o.nick);
   tab = ['off', 'watch'].includes(tab) ? tab : 'players';
   file('official.json');  // 공식경기 탭으로 옮길 때 바로 보이게 미리 받아 둠
   const tabs = [['players', `선수 시세`, o.players.length], ['off', '공식경기', ''], ['watch', '관심선수', w.length]];
   const top = `<div class="head"><a class="btn" href="#/" aria-label="구단 목록으로"><svg class="ico"><use href="#i-back"/></svg></a><h1><b>${esc(o.nick)}</b></h1></div>
     ${o.error ? `<p class="msg">${esc(o.error)}</p>` : ''}
-    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}
+    ${t.n ? `<div class="quote">${bigPrice(t.now)}${agoBlock(t.now, t.d1, t.d7)}${splitLine(t)}
       ${off.length ? `<div class="ofform">${o.div ? `<span>${esc(o.div)}</span>` : ''}<span>최근 ${off.length}경기 ${rec[0]}승 ${rec[1]}무 ${rec[2]}패</span>${form(off.map(m => m.r))}</div>` : ''}
       ${payLine(o.players)}</div>`
       : '<p class="note">이 구단의 명단을 아직 불러오지 못함</p>'}
@@ -768,14 +781,14 @@ function viewOwner(i, tab, season) {
   if (tab === 'watch') return top + `<div class="bar"><h2>${esc(o.nick)}의 관심선수 ${w.length}명</h2><a class="btn quiet" href="#/watch" data-setwho="${esc(o.nick)}">선수 찾아 추가</a></div>
     ${ui.msg ? `<p class="msg" role="alert">${esc(ui.msg)}</p>` : ''}
     ${w.length ? `<ol class="rows">${w.map(p => holdRow(p, o.nick)).join('')}</ol><p class="hint">선수를 길게 누르면 목록에서 뺄 수 있음</p>` : `<p class="note">아직 관심선수가 없음. 선수 찾아 추가에서 저장</p>`}`;
-  const pts = [...dailyPts(t.hist), { t: S.updated, v: t.now, lab: '현재' }];
-  const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) }));
-  const since = real.length ? `${clock(real[0].t).split(' ')[0]}부터 기록` : '기록 시작';
-  const day = (() => { const start = S.updated - 86400, before = real.filter(p => p.t < start).at(-1);
-    return [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...real.filter(p => p.t >= start)]; })();
-  const back = '현재 명단 기준';
-  const ranges = [{ id: '24h', label: '24시간', pts: day, step: true, note: since }, { id: '7d', label: '7일', pts: pts.slice(-8), note: back },
-                  { id: '30d', label: '30일', pts, best: true, note: back }, { id: 'rec', label: '전체 기록', pts: real, step: true, note: since }];
+  // 차트 : 전부 그때 그 명단 기준. values.json = 경기 명단으로 채운 일별 값(실제 기록 전) + 30분마다 실제 기록
+  const real = (file('values.json')?.[o.nick] || []).map(([t, v]) => ({ t, v, lab: clock(t) })), cur = { t: S.updated, v: t.now, lab: '현재' };
+  const since = real.length ? `${clock(real[0].t).split(' ')[0]}부터, 그때 명단 기준` : '기록 시작';
+  const win = days => { const start = S.updated - days * 86400, before = real.filter(p => p.t < start).at(-1);  // 창 왼쪽 끝 값을 이어 붙임
+    return [...(before ? [{ t: start, v: before.v, lab: clock(start) }] : []), ...real.filter(p => p.t >= start), cur]; };
+  const note = '그때 명단 기준';
+  const ranges = [{ id: '24h', label: '24시간', pts: win(1), step: true, note }, { id: '7d', label: '7일', pts: win(7), step: true, note },
+                  { id: '30d', label: '30일', pts: win(30), step: true, best: true, note }, { id: 'rec', label: '전체 기록', pts: [...real, cur], step: true, note: since }];
   if (t.n) after = () => drawChart('team', ranges);
   return top + `${t.n ? chartHTML('team', ranges) : ''}
     ${o.players.length ? playerList(o.players, o.players, '/o' + i, `선수 ${o.players.length}명, ${o.match ? mdate(o.match).split(' ')[0] + ' 경기, ' : ''}${chem(o.players, 8) ? `풀케미 +8${chem(o.players, 11) === 9 ? '/+9' : ''}` : '적응도 5'}`) : ''}
