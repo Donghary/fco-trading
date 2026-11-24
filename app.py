@@ -180,7 +180,10 @@ def refresh_matches():
         STATE["off"][n] = list(dict.fromkeys(got + STATE["off"].get(n, [])))
     recent = [m for s in STATE["squads"].values() for m in s.get("official", [])]
     older = [m for ids in STATE["off"].values() for m in ids]
-    old = lambda r: r.get("v") != 2 or (r.get("type") == 50 and any("season" not in p or "lu" not in p for p in r["p"]))  # 골 위치, 시즌 번호, 명단이 없는 예전 기록
+    # 다시 받을 예전 기록 : 골 위치(v2), 공경 시즌 번호, 명단(lu)이 없는 것. 1대1 명단은 구단 가치 과거 채우기에 씀
+    # 경기 목록은 30일만 주지만 경기 번호로 상세는 더 오래 받을 수 있음 (2026-11-24 10.18 경기로 확인)
+    old = lambda r: (r.get("v") != 2 or (r.get("type") in (40, 50) and any("lu" not in p for p in r["p"]))
+                     or (r.get("type") == 50 and any("season" not in p for p in r["p"])))
     stale = [m for m, r in cache.items() if old(r)]
     missing = [m for m in dict.fromkeys(recent + h2h + STATE["queue"] + older) if m not in cache]
     todo = missing + [m for m in dict.fromkeys(recent + older + stale) if m in cache and old(cache[m])]
@@ -291,7 +294,7 @@ def datacenter(page, spid, grade, **extra):
 # ---------- 상태 (직전 결과를 이어받음) ----------
 
 STATE = {"squads": {}, "intra": {}, "info": {}, "matches": {}, "value": {}, "queue": [], "seeded": False, "off": {}, "off_seeded": False, "m_at": 0, "pay": {}, "seed_used": False, "ok_at": None, "tcolor": {},
-         "vday": {}}  # vday : 실제 기록 시작 전 구단 가치를 경기 명단과 일별 시세로 채운 값 {구단주: {"YYYY-MM-DD": 합계}}
+         "vday": {}}  # vday : 실제 기록 시작 전 구단 가치를 경기 명단과 일별 시세로 채운 값 {구단주: {"n": 쓴 명단 수, "d": {"YYYY-MM-DD": 합계}}}
 PENDING = [0]  # 아직 못 받은 경기 상세 수
 
 
@@ -542,14 +545,16 @@ def daily_values(squads, price_of, first, last):
 
 
 def backfill_values(prices):
-    """실제 기록(STATE["value"]) 이 시작되기 전 구단 가치를 채움. 구단주마다 한 번만 (새 구단주는 추가된 다음 실행에서)"""
+    """실제 기록(STATE["value"]) 이 시작되기 전 구단 가치를 채움 → STATE["vday"][구단주] = {"n": 쓴 명단 수, "d": {날짜: 합계}}
+    그 기간의 명단 수가 늘었을 때(예전 1대1 명단을 다시 받은 뒤)만 다시 계산함. 새 구단주는 추가된 다음 실행에서"""
     cache = dict(prices)
     for nick in OWNERS:
         real = STATE["value"].get(nick)
-        if nick in STATE["vday"] or not real:
+        if not real:
             continue
-        sq = squads_of(nick)
-        if not sq:
+        end = kst_day(real[0][0]) - timedelta(days=1)
+        sq = [x for x in squads_of(nick) if x[0] <= end]
+        if not sq or STATE["vday"].get(nick, {}).get("n") == len(sq):
             continue
         def price_of(spid, grade, d):
             if (spid, grade) not in cache:
@@ -557,13 +562,13 @@ def backfill_values(prices):
                 time.sleep(0.1)
             p = cache[(spid, grade)]
             return dict(zip(p["days"], p["daily"])).get(f"{d.month}.{d.day:02d}", 0)  # 데이터센터 날짜 표기 "11.05"
-        STATE["vday"][nick] = daily_values(sq, price_of, sq[0][0], kst_day(real[0][0]) - timedelta(days=1))
-        print("구단 가치 과거 채움", nick, len(STATE["vday"][nick]), "일")
+        STATE["vday"][nick] = {"n": len(sq), "d": daily_values(sq, price_of, sq[0][0], end)}
+        print("구단 가치 과거 채움", nick, len(STATE["vday"][nick]["d"]), "일, 명단", len(sq), "경기")
 
 
 def value_series(nick):
     """그때 그 명단 기준 구단 가치 [(시각, 값)] : 채운 일별 값(그날 23:59) + 실제 기록"""
-    days = [(datetime.combine(date.fromisoformat(k), datetime.max.time(), KST).timestamp(), v) for k, v in sorted(STATE["vday"].get(nick, {}).items())]
+    days = [(datetime.combine(date.fromisoformat(k), datetime.max.time(), KST).timestamp(), v) for k, v in sorted(STATE["vday"].get(nick, {}).get("d", {}).items())]
     return [[int(t), v] for t, v in days] + STATE["value"].get(nick, [])
 
 
