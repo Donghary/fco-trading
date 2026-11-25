@@ -41,6 +41,9 @@ VALUE_DAYS = 120  # 실제 구단 가치 기록 보관 기간(일)
 OPP_PER_RUN = 15  # 한 번에 상대 구단 가치를 매길 공식경기 수 (경기당 데이터센터 시세 조회 최대 18번)
 GROW = 4  # 능력치 기준 적응도 : 0~4 가 게임의 1~5 단계. 팀컬러는 화면의 오버롤 계산에서 더함
 INFO_V = 2  # parse_info 결과 형식. 올리면 저장된 능력치 정보를 다음 실행에서 전부 다시 받음 (2 : 팀컬러 목록 추가)
+# 이 시각 전에 받은 능력치 정보는 이 시각이 지나면 다시 받음. 클럽 경력 업데이트(팀컬러 목록이 바뀜)가 있는 점검 끝 시각을 넣음
+INFO_AFTER = 1795662000  # 2026-11-26 12:00 KST : 11/26 점검에서 선수 1,117명 클럽 경력 업데이트
+DOWN_HOURS = 18  # 데이터센터가 이 시간 넘게 막히면 점검이 아니라 고장으로 보고 실패 처리(메일). 점검 10시간 + 연장 여유
 TC_PER_RUN = 150  # 팀컬러 효과표를 실행당 몇 개까지 새로 받을지
 TC_DAYS = 30  # 팀컬러 효과 재조회 주기(일)
 ENHANCE_TC = (10004, 10001, 10002, 10003)  # 강화 팀컬러 : 백금빛(11강↑), 금빛(8강↑), 은빛(5강↑), 동빛(3강↑) 물결
@@ -62,10 +65,13 @@ def meta(name):
     f = ROOT / f"meta_{name}.json"
     if not f.exists() or time.time() - f.stat().st_mtime > 86400:
         try:
-            f.write_bytes(get(f"https://open.api.nexon.com/static/fconline/meta/{name}.json"))
-        except OSError:
-            if not f.exists():
-                raise
+            raw = get(f"https://open.api.nexon.com/static/fconline/meta/{name}.json")
+            json.loads(raw)  # 점검 중 안내 페이지 같은 JSON 아닌 응답은 저장하지 않음
+            f.write_bytes(raw)
+        except (OSError, ValueError) as e:
+            if not f.exists():  # Actions 는 매번 새로 받으므로 넥슨 전체 점검이면 여기로 옴 : 빈 목록으로 두고 build 가 배포를 건너뜀
+                print("메타데이터 조회 실패", name, e, file=sys.stderr)
+                return []
     return json.loads(f.read_bytes())
 
 
@@ -635,7 +641,7 @@ def build():
                 refresh_squad(n, s)
                 s["error"] = None
             except Exception as e:
-                if "429" not in str(e):  # 일일 한도 초과는 잠깐이라 화면에 띄우지 않음
+                if not re.search(r"오류 (429|5\d\d)", str(e)):  # 한도 초과, 점검 중 서버 오류는 잠깐이라 화면에 띄우지 않음
                     s["error"] = str(e)  # 이전 명단은 유지, 다음 실행 때 다시 시도
                 print("명단 조회 실패", n, e, file=sys.stderr)
 
@@ -656,17 +662,19 @@ def build():
             if prices[k]["now"] and not prices[k].get("stale"):  # 대체한 값은 시간대별 기록에 넣지 않음
                 add_intra(key, now, prices[k]["now"])
             info = STATE["info"].get(key, {})
-            if now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW or info.get("v") != INFO_V:
+            if (now - info.get("at", 0) >= INFO_DAYS * 86400 or info.get("grow") != GROW or info.get("v") != INFO_V
+                    or now >= INFO_AFTER > info.get("at", 0)):
                 page = datacenter("PlayerAbility", *k, n1Grow=GROW)
                 STATE["info"][key] = {**parse_info(page), "at": now, "grow": GROW, "v": INFO_V}
         except Exception as e:
             print("데이터센터 조회 실패", k, e, file=sys.stderr)
         time.sleep(0.1)  # 데이터센터에 부담 주지 않게 천천히
-    if keys and not any(p["now"] for p in prices.values()):  # 하나도 못 받았거나 전부 0 (페이지 구조가 바뀐 경우)
+    # 하나도 못 받았거나 전부 0 (페이지 구조가 바뀐 경우), 또는 선수 이름 목록을 못 받음 (넥슨 전체 점검)
+    if (keys and not any(p["now"] for p in prices.values())) or not NAMES:
         # 목요일 패치 점검 등으로 데이터센터가 막힘(403). 점검 중엔 거래도 없으니 배포를 건너뛰고 이전 페이지를 그대로 둠.
         # 실패로 끝내지 않음 : 점검 내내 실패 메일이 쌓이지 않게 함
-        print("시세를 하나도 받지 못함 (넥슨 점검 추정). 이번 배포는 건너뜀", file=sys.stderr)
-        if STATE["ok_at"] and now - STATE["ok_at"] > 14 * 3600:  # 목요일 점검(길면 11시간 안팎)보다 길면 고장일 수 있음 : 실패로 끝내 메일이 오게 함
+        print("시세나 선수 이름 목록을 받지 못함 (넥슨 점검 추정). 이번 배포는 건너뜀", file=sys.stderr)
+        if STATE["ok_at"] and now - STATE["ok_at"] > DOWN_HOURS * 3600:  # 점검보다 길면 고장일 수 있음 : 실패로 끝내 메일이 오게 함
             raise RuntimeError(f"데이터센터에서 시세를 {(now - STATE['ok_at']) // 3600}시간째 받지 못함. 페이지 구조 변경이나 차단 확인 필요")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
